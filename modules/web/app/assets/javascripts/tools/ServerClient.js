@@ -24,6 +24,15 @@ define(['jquery'], function(jquery) {
     };
 
 
+    function sendToServer(payload) {
+        if (connection) {
+            connection.send(JSON.stringify(payload));
+            return true;
+        } else {
+            return false;
+        }
+    }
+
 
     return {
         addListener: function (ref) {
@@ -41,20 +50,23 @@ define(['jquery'], function(jquery) {
                     console.log("Stopped: " +seed );
                 },
                 subscribe: function(topic) {
-                    interest.push(topic);
-                    connection.send(JSON.stringify({type: "sub", topic: topic}));
-                    console.log("Registered interest: " + topic + " seed: " +seed );
+                    if (sendToServer({type: "sub", topic: topic})) {
+                        interest.push(topic);
+                        console.log("Registered interest: " + topic + " seed: " +seed );
+                    }
                 },
                 unsubscribe: function(topic) {
-                    interest = interest.filter(function(next) {
-                        return next != topic;
-                    });
-                    connection.send(JSON.stringify({type: "unsub", topic: topic}));
-                    console.log("Unregistered interest: " + topic + " seed: " +seed );
+                    if (sendToServer({type: "unsub", topic: topic})) {
+                        interest = interest.filter(function (next) {
+                            return next != topic;
+                        });
+                        console.log("Unregistered interest: " + topic + " seed: " + seed);
+                    }
                 },
                 command: function(topic, data) {
-                    connection.send(JSON.stringify({type: "cmd", topic: topic, data: data}));
-                    console.log("Sent command into: " + topic + " seed: " +seed );
+                    if (sendToServer({type: "cmd", topic: topic, data: data})) {
+                        console.log("Sent command into: " + topic + " seed: " + seed);
+                    }
                 }
             };
 
