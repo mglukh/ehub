@@ -40,7 +40,7 @@ define(['jquery'], function (jquery) {
 
     function sendCommand(topic, data) {
         if (sendToServer({type: "cmd", topic: topic, data: data})) {
-            console.log("Sent command into: " + topic + " seed: " + seed);
+            console.debug("Sent command into: " + topic );
         }
     }
 

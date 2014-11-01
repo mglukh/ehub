@@ -14,7 +14,7 @@ define(['react', 'subscriberMixin'], function (React, subscriberMixin) {
         renderData: function() {
             return (
                 <div>
-                    {this.state.data.username} : {this.state.data.text} : {this.state.another}
+                    {this.state.data.name} : {this.state.data.text} : {this.state.data.state}
                 </div>
             );
         },

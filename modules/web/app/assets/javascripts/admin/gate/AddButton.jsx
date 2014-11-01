@@ -17,7 +17,7 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
 
             this.sendCommand("/gates/list/add", {name: name});
 
-            alert("sent!");
+            this.refs.gateName.getDOMNode().value = null;
 
             $('#myModal').modal('hide');
             return true;
