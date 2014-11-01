@@ -48,6 +48,7 @@ class MessageRouterActor extends ActorWithComposableBehavior {
     if (refs.isEmpty) {
       subscribers -= subject
       publishToProviders(Unsubscribe(subject))
+      clearCacheFor(subject)
     } else subscribers += (subject -> refs)
   }
 

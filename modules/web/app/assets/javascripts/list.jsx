@@ -1,29 +1,23 @@
 /** @jsx React.DOM */
-define(['react', 'simpleclient'], function(React, client) {
+define(['react', 'AutoSubscribeMixin'], function(React, AutoSubscribeMixin) {
 
 
     var List = React.createClass({
+        mixins: [AutoSubscribeMixin],
+        subscriptionId: function() {
+            return "/gates/list";
+        },
         getInitialState: function () {
             return {list: [], another: 1}
         },
-        componentDidMount: function () {
-
-            var _this = this;
-
-            this.listener = {
-                onConnected: function () {
-                    _this.sess.subscribe("/gates/list");
-                },
-                onDisconnected: function () {
-                },
-                onMessage: function (data) {
-                    _this.setState({list: data.data})
-                }
-            };
-            this.sess = client.addListener(this.listener)
+        onDataUpdate: function(data) {
+            this.setState({list: data.data})
         },
-        componentWillUnmount: function () {
-            this.sess.stop()
+        componentDidMount: function() {
+            this.startSubscription();
+        },
+        componentWillUnmount: function() {
+            this.stopSubscription();
         },
         render: function () {
             return (

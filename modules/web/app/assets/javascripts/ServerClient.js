@@ -1,9 +1,12 @@
 define(['jquery'], function(jquery) {
 
-    var sock = new WebSocket("ws://localhost:9000/socket");
+    var endpoint = "ws://localhost:9000/socket";
+
+    var sock = new WebSocket(endpoint);
     var connection = null;
+    var listeners = [];
     sock.onmessage = function (e) {
-        console.log("Received!: " + e.data);
+        console.debug("From Websocket: " + e.data);
         var data = e.data;
         listeners.forEach(function (next) {
             if (next.interestedIn(e.data.topic)) {
@@ -12,16 +15,15 @@ define(['jquery'], function(jquery) {
         });
     };
 
-    var listeners = [];
-
     sock.onopen = function (x) {
-        console.log("Open " + x);
-        sock.send(JSON.stringify({type: "source", system: "BX"}));
+        console.debug("Websocket open at " + endpoint);
         connection = sock;
         listeners.forEach(function (next) {
             next.ref.onConnected();
         });
     };
+
+
 
     return {
         addListener: function (ref) {
@@ -61,7 +63,7 @@ define(['jquery'], function(jquery) {
                 },
                 unsubscribe: function(topic) {
                     interest = interest.filter(function(next) {
-                       return next != topic;
+                        return next != topic;
                     });
                     connection.send(JSON.stringify({type: "unsub", topic: topic}));
                     console.log("Unregistered interest: " + topic + " seed: " +seed );
@@ -73,8 +75,7 @@ define(['jquery'], function(jquery) {
             };
 
         }
-
-
     };
+
 
 });
