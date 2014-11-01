@@ -9,7 +9,6 @@ import akka.stream.{FlowMaterializer, MaterializerSettings}
 import akka.util.{Timeout, ByteString}
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
-import pyrio.agent._
 
 import scala.concurrent.duration.DurationDouble
 

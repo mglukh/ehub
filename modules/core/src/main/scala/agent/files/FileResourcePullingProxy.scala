@@ -7,8 +7,8 @@ import akka.actor.Props
 import akka.stream.actor.{ActorPublisherMessage, ActorPublisher}
 import akka.util.ByteString
 import com.typesafe.scalalogging.LazyLogging
-import nugget.core.actors.{ActorWithTicks, ShutdownablePublisherActor, PipelineWithStatesActor, ActorWithComposableBehavior}
-import pyrio.agent.{MonitorTarget}
+import nugget.agent.MonitorTarget
+import nugget.core.actors._
 
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext

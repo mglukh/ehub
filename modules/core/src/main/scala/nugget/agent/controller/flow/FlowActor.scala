@@ -9,11 +9,10 @@ import akka.stream.actor.{ActorPublisher, ActorSubscriber}
 import akka.stream.scaladsl2._
 import akka.util.ByteString
 import nugget.agent.controller.MessageWithAttachments
-import nugget.agent.{BlackholeAutoAckSinkActor, SubscriberBoundaryInitiatingActor}
+import nugget.agent.{RollingFileMonitorTarget, MonitorTarget, BlackholeAutoAckSinkActor, SubscriberBoundaryInitiatingActor}
 import nugget.core.actors.{Acknowledged, ActorWithComposableBehavior}
 import nugget.core.{BecomeActive, BecomePassive}
 import play.api.libs.json._
-import pyrio.agent.{MonitorTarget, RollingFileMonitorTarget}
 
 /**
  * Created by maks on 20/09/2014.

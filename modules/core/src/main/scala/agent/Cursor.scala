@@ -1,0 +1,4 @@
+package agent
+
+trait Cursor {
+}

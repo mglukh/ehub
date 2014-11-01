@@ -1,9 +1,22 @@
+import com.typesafe.scalalogging
+import hq.gates.GateManagerActor
+import hq.routing.MessageRouterActor
 import play.api._
 import play.api.mvc._
 import play.api.mvc.Results._
-import scala.concurrent.Future
+import play.libs.Akka
 
-object Global extends GlobalSettings {
+object Global extends GlobalSettings with scalalogging.StrictLogging {
+
+  override def onStart(app: Application): Unit = {
+
+    implicit val system = Akka.system()
+    implicit val ec = system.dispatcher
+
+    MessageRouterActor.start
+    GateManagerActor.start
+
+  }
 
   private def getSubdomain (request: RequestHeader) = request.domain.replaceFirst("[\\.]?[^\\.]+[\\.][^\\.]+$", "")
 
@@ -29,5 +42,6 @@ object Global extends GlobalSettings {
     case "admin" => GlobalAdmin.onBadRequest(request, error)
     case _ => GlobalWeb.onBadRequest(request, error)
   }
+
 
 }

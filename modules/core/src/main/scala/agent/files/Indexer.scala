@@ -10,7 +10,7 @@ import java.util.zip.{ZipInputStream, GZIPInputStream}
 import agent.{DataChunk, Cursor}
 import akka.util.ByteString
 import com.typesafe.scalalogging.LazyLogging
-import pyrio.agent.{RollingFileMonitorTarget, MonitorTarget}
+import nugget.agent.{RollingFileMonitorTarget, MonitorTarget}
 
 import scala.annotation.tailrec
 import scala.util.matching.Regex

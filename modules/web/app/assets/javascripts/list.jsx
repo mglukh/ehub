@@ -12,19 +12,18 @@ define(['react', 'simpleclient'], function(React, client) {
 
             this.listener = {
                 onConnected: function () {
-                    client.send(JSON.stringify({req: "source", system: "Zdrasti"}));
+                    _this.sess.subscribe("/gates/list");
                 },
                 onDisconnected: function () {
                 },
                 onMessage: function (data) {
-                    _this.setState({list: data})
+                    _this.setState({list: data.data})
                 }
             };
-            alert(client)
-            client.addListener(this.listener)
+            this.sess = client.addListener(this.listener)
         },
         componentWillUnmount: function () {
-            client.removeListener(this.listener)
+            this.sess.stop()
         },
         render: function () {
             return (
