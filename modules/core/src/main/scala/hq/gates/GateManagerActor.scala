@@ -4,7 +4,7 @@ import akka.actor.{ActorRefFactory, Props}
 import hq._
 import hq.routing.MessageRouterActor
 import nugget.core.actors.ActorWithComposableBehavior
-import play.api.libs.json.Json
+import play.api.libs.json.{JsValue, Json}
 
 
 object GateManagerActor {
@@ -19,6 +19,7 @@ class GateManagerActor extends ActorWithComposableBehavior {
 
   val ListRequest = """/gates/list""".r
   val ListItemRequest = """/gates/list/(\d+)""".r
+  val CmdAdd = """/gates/list/add""".r
 
   override def commonBehavior(): Receive = handler orElse super.commonBehavior()
 
@@ -46,10 +47,23 @@ class GateManagerActor extends ActorWithComposableBehavior {
     )
   }
 
+  def handleCommand(subj: String, maybeData: Option[JsValue]): JsValue = subj match {
+    case CmdAdd() => Json.arr(
+      Json.obj("id" -> 1),
+      Json.obj("id" -> 2),
+      Json.obj("id" -> 3),
+      Json.obj("id" -> 4),
+      Json.obj("id" -> 5)
+    )
+  }
+
+
   def handler: Receive = {
 
     case Subscribe(subj) =>
       MessageRouterActor.path ! Image(Update(subj, handleSubscribe(subj.route)))
+    case Command(subj, data) =>
+      MessageRouterActor.path ! Image(Update(Subject("/gates/list"), handleCommand(subj.route, data)))
 
 
   }

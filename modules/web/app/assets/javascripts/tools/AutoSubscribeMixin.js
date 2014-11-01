@@ -17,10 +17,12 @@ define(['wsclient'], function(client) {
             var id = this.subscriptionId();
             this.listener = {
                 onConnected: function (handle) {
+                    self.setState({connected: true});
                     console.debug("onConnected() for " + id);
                     self.subscribe(handle);
                 },
                 onDisconnected: function (handle) {
+                    self.setState({connected: false});
                     console.debug("onDisconnected() for " + id);
                 },
                 onMessage: function (data) {

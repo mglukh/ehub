@@ -9,6 +9,7 @@
             bootstrap: "../lib/bootstrap/js/bootstrap",
 
             subscriberMixin: "tools/AutoSubscribeMixin",
+            sendOnlyMixin: "tools/SendOnlyMixin",
             wsclient: "tools/ServerClient"
         },
         shim: {

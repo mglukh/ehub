@@ -1,4 +1,4 @@
-define(['jquery'], function(jquery) {
+define(['jquery'], function (jquery) {
 
     var endpoint = "ws://localhost:9000/socket";
 
@@ -23,6 +23,10 @@ define(['jquery'], function(jquery) {
         });
     };
 
+    function connected() {
+        return connection;
+    }
+
 
     function sendToServer(payload) {
         if (connection) {
@@ -34,6 +38,12 @@ define(['jquery'], function(jquery) {
     }
 
 
+    function sendCommand(topic, data) {
+        if (sendToServer({type: "cmd", topic: topic, data: data})) {
+            console.log("Sent command into: " + topic + " seed: " + seed);
+        }
+    }
+
     return {
         addListener: function (ref) {
 
@@ -43,19 +53,19 @@ define(['jquery'], function(jquery) {
 
             var handle = {
 
-                stop: function() {
+                stop: function () {
                     listeners = listeners.filter(function (next) {
                         return next.seed != seed;
                     });
-                    console.log("Stopped: " +seed );
+                    console.log("Stopped: " + seed);
                 },
-                subscribe: function(topic) {
+                subscribe: function (topic) {
                     if (sendToServer({type: "sub", topic: topic})) {
                         interest.push(topic);
-                        console.log("Registered interest: " + topic + " seed: " +seed );
+                        console.log("Registered interest: " + topic + " seed: " + seed);
                     }
                 },
-                unsubscribe: function(topic) {
+                unsubscribe: function (topic) {
                     if (sendToServer({type: "unsub", topic: topic})) {
                         interest = interest.filter(function (next) {
                             return next != topic;
@@ -63,22 +73,17 @@ define(['jquery'], function(jquery) {
                         console.log("Unregistered interest: " + topic + " seed: " + seed);
                     }
                 },
-                command: function(topic, data) {
-                    if (sendToServer({type: "cmd", topic: topic, data: data})) {
-                        console.log("Sent command into: " + topic + " seed: " + seed);
-                    }
-                }
+                command: sendCommand
             };
 
             var struc = {
                 ref: ref,
                 seed: seed,
-                interestedIn: function(val) {
+                interestedIn: function (val) {
                     return $.inArray(val, interest) > -1;
                 },
                 handle: handle
             };
-
 
 
             listeners.push(struc);
