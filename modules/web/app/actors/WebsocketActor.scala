@@ -26,7 +26,7 @@ class WebsocketActor(out: ActorRef)
     case Update(Subject(subj, topic), data) =>
       val value: String = Json.obj(
         "topic" -> subj,
-        "data" -> data
+        "payload" -> data
       ).toString()
       logger.info("!>>> " + value)
       logger.info("!>>> " + out)

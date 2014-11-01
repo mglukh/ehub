@@ -7,10 +7,10 @@ define(['jquery'], function(jquery) {
     var listeners = [];
     sock.onmessage = function (e) {
         console.debug("From Websocket: " + e.data);
-        var data = e.data;
+        var data = JSON.parse(e.data);
         listeners.forEach(function (next) {
-            if (next.interestedIn(e.data.topic)) {
-                next.ref.onMessage(JSON.parse(data));
+            if (next.interestedIn(data.topic)) {
+                next.ref.onMessage(data.payload);
             }
         });
     };
@@ -19,7 +19,7 @@ define(['jquery'], function(jquery) {
         console.debug("Websocket open at " + endpoint);
         connection = sock;
         listeners.forEach(function (next) {
-            next.ref.onConnected();
+            next.ref.onConnected(next.handle);
         });
     };
 
@@ -31,24 +31,8 @@ define(['jquery'], function(jquery) {
             var seed = Math.random().toString(36).substr(2, 10);
 
             var interest = [];
-            var struc = {
-                ref: ref,
-                seed: seed,
-                interestedIn: function(val) {
-                    return $.inArray(val, interest);
-                }
-            };
 
-            listeners.push(struc);
-
-            if (connection !== null) {
-                ref.onConnected();
-            } else {
-                ref.onDisconnected();
-            }
-
-
-            return {
+            var handle = {
 
                 stop: function() {
                     listeners = listeners.filter(function (next) {
@@ -73,6 +57,28 @@ define(['jquery'], function(jquery) {
                     console.log("Sent command into: " + topic + " seed: " +seed );
                 }
             };
+
+            var struc = {
+                ref: ref,
+                seed: seed,
+                interestedIn: function(val) {
+                    return $.inArray(val, interest) > -1;
+                },
+                handle: handle
+            };
+
+
+
+            listeners.push(struc);
+
+            if (connection !== null) {
+                ref.onConnected(handle);
+            } else {
+                ref.onDisconnected(handle);
+            }
+
+
+            return handle;
 
         }
     };

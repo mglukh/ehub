@@ -1,9 +1,8 @@
 /** @jsx React.DOM */
-define(['react', 'AutoSubscribeMixin'], function(React, AutoSubscribeMixin) {
+define(['react', 'subscriberMixin', 'admin/gate/ListItem'], function(React, subscriberMixin, ListItem) {
 
-
-    var List = React.createClass({
-        mixins: [AutoSubscribeMixin],
+    return React.createClass({
+        mixins: [subscriberMixin],
         subscriptionId: function() {
             return "/gates/list";
         },
@@ -11,13 +10,7 @@ define(['react', 'AutoSubscribeMixin'], function(React, AutoSubscribeMixin) {
             return {list: [], another: 1}
         },
         onDataUpdate: function(data) {
-            this.setState({list: data.data})
-        },
-        componentDidMount: function() {
-            this.startSubscription();
-        },
-        componentWillUnmount: function() {
-            this.stopSubscription();
+            this.setState({list: data})
         },
         render: function () {
             return (
@@ -26,7 +19,7 @@ define(['react', 'AutoSubscribeMixin'], function(React, AutoSubscribeMixin) {
                 {this.state.list.length}
                 {
                     this.state.list.map(function (el) {
-                        return <div>{el.username} : {el.text} : this.state.another</div>;
+                        return <ListItem id={el.id}/>;
                     })
                     }
 
@@ -34,7 +27,5 @@ define(['react', 'AutoSubscribeMixin'], function(React, AutoSubscribeMixin) {
             );
         }
     });
-
-    return List;
 
 });

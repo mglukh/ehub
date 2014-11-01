@@ -6,7 +6,10 @@
             common: "../lib/common/javascripts",
             jquery: "../lib/jquery/jquery",
             react: "../lib/react/react",
-            bootstrap: "../lib/bootstrap/js/bootstrap"
+            bootstrap: "../lib/bootstrap/js/bootstrap",
+
+            subscriberMixin: "tools/AutoSubscribeMixin",
+            wsclient: "tools/ServerClient"
         },
         shim: {
             bootstrap: {
@@ -18,6 +21,6 @@
         }
     });
 
-    require(["attempt1"]);
+    require(["admin/app"]);
 
 })();
