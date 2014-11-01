@@ -3,25 +3,22 @@ define(['react', 'subscriberMixin'], function (React, subscriberMixin) {
 
     return React.createClass({
         mixins: [subscriberMixin],
+
         subscriptionId: function () {
             return "/gates/list/" + this.props.id;
         },
         getInitialState: function () {
-            return {data: {}, another: 1}
-        },
-        onDataUpdate: function (data) {
-            this.setState({data: data})
+            return {data: null, another: 1}
         },
 
-
-        renderLineWithData: function() {
+        renderData: function() {
             return (
                 <div>
                     {this.state.data.username} : {this.state.data.text} : {this.state.another}
                 </div>
             );
         },
-        renderEmptyLine: function() {
+        renderLoading: function() {
             return (
                 <div>loading...</div>
             );
@@ -29,9 +26,9 @@ define(['react', 'subscriberMixin'], function (React, subscriberMixin) {
 
         render: function () {
             if (this.state.data) {
-                return this.renderLineWithData();
+                return this.renderData();
             } else {
-                return this.renderEmptyLine();
+                return this.renderLoading();
             }
         }
     });

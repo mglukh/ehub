@@ -6,26 +6,30 @@ define(['wsclient'], function(client) {
             if (id) {
                 handle.subscribe(id);
             } else {
-                console.warn("subscriptionId() is undefined or returns empty string");
+                console.warn("subscriptionId is undefined or returns empty string");
             }
+        },
+        onDataUpdate: function (data) {
+            this.setState({data: data});
         },
         startSubscription: function () {
             var self = this;
+            var id = this.subscriptionId();
             this.listener = {
                 onConnected: function (handle) {
-                    console.debug("onConnected() for " + self.subscriptionId());
+                    console.debug("onConnected() for " + id);
                     self.subscribe(handle);
                 },
                 onDisconnected: function (handle) {
-                    console.debug("onDisconnected() for " + self.subscriptionId());
+                    console.debug("onDisconnected() for " + id);
                 },
                 onMessage: function (data) {
-                    console.debug("onMessage() for " + self.subscriptionId());
+                    console.debug("onMessage() for " + id);
                     self.onDataUpdate(data);
                 }
             };
             this.handle = client.addListener(this.listener);
-            console.debug("Initiated subscription for " + this.subscriptionId());
+            console.debug("Initiated subscription for " + id);
         },
         stopSubscription: function () {
             this.handle.stop();
