@@ -1,12 +1,9 @@
 package actors
 
-import akka.actor.{ActorRef, Props}
-import com.google.common.base.Splitter
-import hq.routing.MessageRouterActor
+import akka.actor.{Actor, ActorRef, Props}
+import common.actors.ActorWithComposableBehavior
 import hq._
-import nugget.core.actors.ActorWithComposableBehavior
-import play.api
-import play.api.data
+import hq.routing.MessageRouterActor
 import play.api.libs.json.{JsValue, Json}
 
 object WebsocketActor {
@@ -22,9 +19,9 @@ class WebsocketActor(out: ActorRef)
     logger.info(s"Accepted WebSocket connection, proxy actor: $out")
   }
 
-  override def commonBehavior(): Receive = clientMessages orElse serverMessages orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = clientMessages orElse serverMessages orElse super.commonBehavior()
 
-  def serverMessages: Receive = {
+  def serverMessages: Actor.Receive = {
     case Update(Subject(subj, topic), data, _) =>
       val value: String = "U|" + subj + "|" + topic + "|" + data.toString()
       logger.info("!>>> " + value)
@@ -37,7 +34,7 @@ class WebsocketActor(out: ActorRef)
   }
 
 
-  def clientMessages: Receive = {
+  def clientMessages: Actor.Receive = {
     case x: String =>
       logger.info(s"->Websocket: $x")
 

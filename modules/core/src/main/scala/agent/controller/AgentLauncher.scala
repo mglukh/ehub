@@ -1,14 +1,12 @@
 package agent.controller
 
-import agent.controller.AgentControllerActor
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
-import net.ceedubs.ficus.Ficus._
 
 /**
  * Created by maks on 18/09/14.
  */
-object AgentControllerActorTest extends App {
+object AgentLauncher extends App {
 
   implicit val system =  ActorSystem("Agent",ConfigFactory.load("akka.conf"))
 

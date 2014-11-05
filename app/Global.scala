@@ -1,4 +1,7 @@
+import akka.actor.ActorSystem
+import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging
+import hq.agents.AgentsManagerActor
 import hq.gates.GateManagerActor
 import hq.routing.MessageRouterActor
 import play.api._
@@ -10,11 +13,12 @@ object Global extends GlobalSettings with scalalogging.StrictLogging {
 
   override def onStart(app: Application): Unit = {
 
-    implicit val system = Akka.system()
+    implicit val system =  Akka.system()
     implicit val ec = system.dispatcher
 
     MessageRouterActor.start
     GateManagerActor.start
+    AgentsManagerActor.start
 
   }
 

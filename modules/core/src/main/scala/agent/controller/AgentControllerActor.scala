@@ -54,7 +54,7 @@ class AgentControllerActor(implicit config: Config)
 
   private def handleConnectivityMessages: Receive = handleReconnectMessages orElse {
     case ConnectedState() =>
-      remoteActorRef.foreach(_ ! Handshake())
+      remoteActorRef.foreach(_ ! Handshake(config.as[String]("agent.name")))
     case DisconnectedState() =>
       initiateReconnect()
   }
