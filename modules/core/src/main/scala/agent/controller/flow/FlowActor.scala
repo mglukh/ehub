@@ -2,21 +2,17 @@ package nugget.agent.controller.flow
 
 import java.nio.charset.Charset
 
-import agent.Cursor
-import agent.files._
+import agent.flavors.files._
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.{ActorPublisher, ActorSubscriber}
 import akka.stream.scaladsl2._
 import akka.util.ByteString
-import nugget.agent.controller.MessageWithAttachments
-import nugget.agent.{RollingFileMonitorTarget, MonitorTarget, BlackholeAutoAckSinkActor, SubscriberBoundaryInitiatingActor}
+import nugget.agent.shared.MessageWithAttachments
 import nugget.core.actors.{Acknowledged, ActorWithComposableBehavior}
 import nugget.core.{BecomeActive, BecomePassive}
 import play.api.libs.json._
 
-/**
- * Created by maks on 20/09/2014.
- */
+
 object FlowActor {
   def props(flowId: Long, config: JsValue, state: Option[JsValue])(implicit mat: FlowMaterializer, system: ActorSystem) = Props(new FlowActor(flowId, config, state))
 }

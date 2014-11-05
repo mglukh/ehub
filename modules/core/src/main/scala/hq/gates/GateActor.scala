@@ -1,34 +1,82 @@
 package hq.gates
 
-import akka.actor.{ActorRefFactory, Props}
-import hq.{Subject, Update, Image, Subscribe}
+import akka.actor.{PoisonPill, ActorRef, ActorRefFactory, Props}
+import hq._
 import hq.routing.MessageRouterActor
-import nugget.core.actors.PipelineWithStatesActor
-import play.api.libs.json.Json
-
-import scala.util.matching.Regex
+import nugget.core.{BecomeActive, BecomePassive}
+import nugget.core.actors.{ActorWithSubscribers, PipelineWithStatesActor}
+import play.api.libs.json.{JsString, Json}
 
 object GateActor {
   def props(id: String) = Props(new GateActor(id))
 
   def start(id: String)(implicit f: ActorRefFactory) = f.actorOf(props(id), id)
 }
-class GateActor(id: String) extends PipelineWithStatesActor {
 
+class GateActor(id: String) extends PipelineWithStatesActor with ActorWithSubscribers {
 
-  override def commonBehavior(): Receive = handleMessages orElse super.commonBehavior()
+  def route = "gate/"+id
 
-  override def becomeActive(): Unit = {}
-  override def becomePassive(): Unit = {}
+  val GATE_X_INFO = Subject(route, "info")
 
-  def handleMessages : Receive = {
-    case Subscribe(_) =>
-      MessageRouterActor.path ! Image(Update(Subject("/gates/list/" + id), Json.obj(
-        "name" -> id,
-        "text" -> s"some random text from $id",
-        "state" -> "passive"
-      )))
+  val GATE_X_START = Subject(route, "start")
+  val GATE_X_STOP = Subject(route, "stop")
+  val GATE_X_KILL = Subject(route, "kill")
 
+  var active = false
+
+  override def preStart(): Unit = {
+    super.preStart()
+    MessageRouterActor.path ! RegisterComponent(route, self)
+    context.parent ! GateAvailable(route)
   }
+
+  override def commonBehavior(): Receive = commandHandler orElse super.commonBehavior()
+
+  override def becomeActive(): Unit = {
+    active = true
+    updateToAll()
+  }
+
+  override def becomePassive(): Unit = {
+    active = false
+    updateToAll()
+  }
+
+  def updateToAll():Unit = updateToAll(GATE_X_INFO, info)
+
+  def info = Some(Json.obj(
+    "name" -> id,
+    "text" -> s"some random text from $id",
+    "state" -> (if (active) "active" else "passive")
+  ))
+
+  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
+    case GATE_X_INFO => updateTo(subject, ref, info)
+  }
+
+
+
+  private def commandHandler : Receive = {
+    case Command(GATE_X_STOP, _) =>
+      lastRequestedState match {
+        case Some(Active()) =>
+          logger.info("Stopping the gate")
+          self ! BecomePassive()
+        case _ =>
+          logger.info("Already stopped")
+      }
+    case Command(GATE_X_START, _) =>
+      lastRequestedState match {
+        case Some(Active()) =>
+          logger.info("Already started")
+        case _ =>
+          logger.info("Starting the gate")
+          self ! BecomeActive()
+      }
+    case Command(GATE_X_KILL, _) =>
+      self ! PoisonPill
+  }
+
 
 }

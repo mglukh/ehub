@@ -1,4 +1,4 @@
-package nugget.agent
+package agent.flavors.files
 
 import java.io.File
 

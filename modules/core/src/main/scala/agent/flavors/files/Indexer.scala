@@ -1,16 +1,15 @@
-package agent.files
+package agent.flavors.files
 
 import java.io._
 import java.nio.CharBuffer
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.attribute.BasicFileAttributes
-import java.util.zip.{ZipInputStream, GZIPInputStream}
+import java.util.zip.{GZIPInputStream, ZipInputStream}
 
-import agent.{DataChunk, Cursor}
+import agent.flavors._
 import akka.util.ByteString
 import com.typesafe.scalalogging.LazyLogging
-import nugget.agent.{RollingFileMonitorTarget, MonitorTarget}
 
 import scala.annotation.tailrec
 import scala.util.matching.Regex
@@ -195,7 +194,6 @@ case class FileIndexerSession(flowId: Long, target: RollingFileMonitorTarget, ca
   }
 
 
-
   var currentSeed = System.currentTimeMillis()
 
   private def updateMemory(indexToIdentificator: List[IndexedEntity]) = catalog.update(indexToIdentificator)
@@ -205,7 +203,7 @@ case class FileIndexerSession(flowId: Long, target: RollingFileMonitorTarget, ca
     val result = list match {
       case Nil => List[IndexedEntity]()
       case head :: Nil => catalog.indexByResourceId(head) match {
-        case Some(IndexedEntity(ResourceIndex(seed, 0),_)) => List(IndexedEntity(ResourceIndex(seed, 0), head))
+        case Some(IndexedEntity(ResourceIndex(seed, 0), _)) => List(IndexedEntity(ResourceIndex(seed, 0), head))
         case Some(IndexedEntity(ResourceIndex(seed, _), _)) =>
           currentSeed = System.currentTimeMillis()
           List(IndexedEntity(ResourceIndex(currentSeed, 0), head))

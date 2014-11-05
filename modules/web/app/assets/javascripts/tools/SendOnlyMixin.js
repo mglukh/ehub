@@ -3,21 +3,29 @@ define(['wsclient'], function(client) {
     return {
         startListener: function () {
             var self = this;
-            this.listener = {
-                onConnected: function (handle) {
-                    self.setState({connected: true});
-                },
-                onDisconnected: function (handle) {
-                    self.setState({connected: false});
-                },
-                onMessage: function (data) {
-                }
-            };
-            this.handle = client.addListener(this.listener);
+
+            this.handle = client.getHandle();
+
+            function wsOpenHandler() {
+                self.setState({connected: true});
+                console.debug("onConnected()" );
+            }
+
+            function wsClosedHandler() {
+                self.setState({connected: false});
+                console.debug("onDisconnected()");
+            }
+
+            this.handle.addWsOpenEventListener(wsOpenHandler);
+            this.handle.addWsClosedEventListener(wsClosedHandler);
+
             this.sendCommand = this.handle.command;
         },
+
         stopListener: function () {
-            this.handle.stop();
+            if (this.handle) {
+                this.handle.stop();
+            }
         },
         componentDidMount: function() {
             this.startListener();

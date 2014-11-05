@@ -1,9 +1,12 @@
 package actors
 
 import akka.actor.{ActorRef, Props}
-import hq.{Update, Command, Subject, Subscribe}
+import com.google.common.base.Splitter
 import hq.routing.MessageRouterActor
+import hq._
 import nugget.core.actors.ActorWithComposableBehavior
+import play.api
+import play.api.data
 import play.api.libs.json.{JsValue, Json}
 
 object WebsocketActor {
@@ -14,7 +17,6 @@ object WebsocketActor {
 class WebsocketActor(out: ActorRef)
   extends ActorWithComposableBehavior {
 
-
   override def preStart(): Unit = {
     super.preStart()
     logger.info(s"Accepted WebSocket connection, proxy actor: $out")
@@ -23,34 +25,44 @@ class WebsocketActor(out: ActorRef)
   override def commonBehavior(): Receive = clientMessages orElse serverMessages orElse super.commonBehavior()
 
   def serverMessages: Receive = {
-    case Update(Subject(subj, topic), data) =>
-      val value: String = Json.obj(
-        "topic" -> subj,
-        "payload" -> data
-      ).toString()
+    case Update(Subject(subj, topic), data, _) =>
+      val value: String = "U|" + subj + "|" + topic + "|" + data.toString()
       logger.info("!>>> " + value)
       logger.info("!>>> " + out)
       out ! value
+    case Discard(Subject(subj, topic)) =>
+      val value: String = "D|" + subj + "|" + topic + "|"
+      logger.info("!>>> " + value)
+      out ! value
   }
+
 
   def clientMessages: Receive = {
     case x: String =>
       logger.info(s"->Websocket: $x")
 
-      val j = Json.parse(x)
-
-      for (
-        s <- (j \ "topic").asOpt[String];
-        subj = Subject(s);
-        t <- (j \ "type").asOpt[String];
-        x <- t match {
-          case "sub" => Some(Subscribe(subj))
-          case "unsub" => Some(Subscribe(subj))
-          case "cmd" => Some(Command(subj, (j \ "data").asOpt[JsValue]))
-          case _ => None
-        }
-      ) MessageRouterActor.path ! x
-
+      x.split('|') match {
+        case Array(msgType, route, topic) =>
+          val subj = Subject(route, topic)
+          val msg = msgType match {
+            case "S" => Some(Subscribe(subj))
+            case "U" => Some(Unsubscribe(subj))
+            case _ =>
+              logger.warn(s"Invalid message type: " + msgType)
+              None
+          }
+          msg foreach(MessageRouterActor.path ! _)
+        case Array(msgType, route, topic, payload) =>
+          val subj = Subject(route, topic)
+          val msg = msgType match {
+            case "C" => Some(Command(subj, Json.parse(payload).asOpt[JsValue]))
+            case _ =>
+              logger.warn("Invalid message type: " + msgType)
+              None
+          }
+          msg foreach(MessageRouterActor.path ! _)
+        case x => logger.warn("Invalid message format" + x)
+      }
 
   }
 

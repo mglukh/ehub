@@ -4,8 +4,8 @@ define(['react', 'subscriberMixin', 'admin/gate/ListItem'], function (React, sub
     return React.createClass({
         mixins: [subscriberMixin],
 
-        subscriptionId: function () {
-            return "/gates/list";
+        subscriptionConfig: function () {
+            return {route:'gates', topic:'list', target: 'list'};
         },
         getInitialState: function () {
             return {data: null}
@@ -14,8 +14,8 @@ define(['react', 'subscriberMixin', 'admin/gate/ListItem'], function (React, sub
         renderData: function() {
             return (
                 <div>
-                {this.state.data.map(function (el) {
-                    return <ListItem id={el.id}/>;
+                {this.state.list.map(function (el) {
+                    return <ListItem key={el.id} id={el.id}/>;
                     })}
                 </div>
             );
@@ -27,7 +27,7 @@ define(['react', 'subscriberMixin', 'admin/gate/ListItem'], function (React, sub
         },
 
         render: function () {
-            if (this.state.data) {
+            if (this.state.list) {
                 return this.renderData();
             } else {
                 return this.renderLoading();

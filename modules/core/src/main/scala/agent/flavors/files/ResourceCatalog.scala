@@ -1,4 +1,4 @@
-package agent.files
+package agent.flavors.files
 
 import java.io.File
 

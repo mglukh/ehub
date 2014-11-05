@@ -1,11 +1,14 @@
 package hq.routing
 
+import akka.actor
+import akka.actor.FSM.->
 import akka.actor._
 import hq._
-import nugget.core.actors.ActorWithComposableBehavior
+import nugget.core.actors.{ActorWithSubscribers, ActorWithComposableBehavior}
 
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
+import scala.concurrent.duration.{DurationLong, Duration}
 
 
 object MessageRouterActor {
@@ -15,47 +18,34 @@ object MessageRouterActor {
 
   def props = Props(new MessageRouterActor())
 }
-class MessageRouterActor extends ActorWithComposableBehavior {
+
+
+case class ProviderState(ref: ActorRef, active: Boolean)
+case class RemoveIfInactive(ref: ActorRef)
+
+class MessageRouterActor extends ActorWithComposableBehavior
+  with ActorWithSubscribers {
 
   val updatesCache : mutable.Map[Subject, Update] = new mutable.HashMap[Subject, Update]()
-  val subscribers : mutable.Map[Subject, Set[ActorRef]] = new mutable.HashMap[Subject, Set[ActorRef]]()
-  val components : mutable.Map[ActorRef, Subject => Boolean] = new mutable.HashMap[ActorRef, Subject => Boolean]()
+  val staticRoutes : mutable.Map[String, ProviderState] = new mutable.HashMap[String, ProviderState]()
 
-  override def commonBehavior(): Receive =
-    messagesFromClientHandler orElse
-      messagesFromProviderHandler orElse
-      super.commonBehavior()
+  implicit val ec  = context.dispatcher
 
+  override def commonBehavior(): Receive = handler orElse super.commonBehavior()
 
-  def addSubscriber(ref: ActorRef, subject: Subject): Unit = {
-    logger.info(s"New subscriber for $subject at $ref")
-    context.watch(ref)
-
-    subscribers.get(subject) match {
-      case None =>
-        logger.info(s"New subscription with component for $subject")
-        publishToProviders(Subscribe(subject))
-      case Some(x) =>
-        logger.info(s"New listener for existing subscription with component for $subject")
-    }
-
-    subscribers += (subject -> (subscribers.getOrElse(subject, new HashSet[ActorRef]()) + ref))
-    updatesCache.get(subject) foreach(sender() ! _)
+  override def firstSubscriber(subject: Subject): Unit = {
+    publishToProviders(Subscribe(subject))
   }
 
-  def removeSubscriber(ref: ActorRef, subject: Subject): Unit = {
-    val refs: Set[ActorRef] = subscribers.getOrElse(subject, new HashSet[ActorRef]()) - ref
-    if (refs.isEmpty) {
-      subscribers -= subject
-      publishToProviders(Unsubscribe(subject))
-      clearCacheFor(subject)
-    } else subscribers += (subject -> refs)
+  override def lastSubscriberGone(subject: Subject): Unit = {
+    publishToProviders(Unsubscribe(subject))
+    clearCacheFor(subject)
   }
 
-  def removeSubscriber(ref: ActorRef): Unit = {
-    subscribers.collect {
-      case (subj, set) if set contains ref => subj
-    } foreach(removeSubscriber(ref, _))
+  override def processUnsubscribeRequest(ref: ActorRef, subject: Subject): Unit = {}
+
+  override def processSubscribeRequest(ref: ActorRef, subject: Subject): Unit = {
+    updatesCache.get(subject) foreach(ref ! _)
   }
 
   def remember(update: Update) = updatesCache += (update.subj -> update)
@@ -63,45 +53,65 @@ class MessageRouterActor extends ActorWithComposableBehavior {
 
 
   def publishToProviders(msg: HQCommMsg): Unit = {
-    components.foreach {
-      case (ref, subjectMatch) if subjectMatch(msg.subj) =>
-        logger.debug(s"$msg -> $ref")
-        ref ! msg
+    val route = msg.subj.route
+    staticRoutes.get(route) match {
+      case Some(ProviderState(ref, true)) => ref ! msg
+      case Some(ProviderState(ref, false)) =>
+        logger.debug(s"Route $route is inactive, message dropped")
+      case None => logger.warn(s"Unknown route $route, message dropped")
     }
   }
-  def publishToClients(msg: HQCommMsg): Unit = subscribers.get(msg.subj) foreach(_.foreach { actor =>
+
+  def publishToClients(msg: HQCommMsg): Unit = subscribersFor(msg.subj) foreach(_.foreach { actor =>
     actor ! msg
     logger.debug(s"s2c: $msg -> $actor")
   })
 
-  def processUpdate(update: Update): Unit = publishToClients(update)
 
-  def register(ref: ActorRef, subjectToBoolean: (Subject) => Boolean): Unit = {
-    components += ref -> subjectToBoolean
-    logger.info(s"Registered new component at $ref")
+  def register(ref: ActorRef, route: String): Unit = {
+    staticRoutes += route -> ProviderState(ref, active = true)
+    context.watch(ref)
+    logger.info(s"Registered new static route $route -> $ref")
   }
 
-
-
-
-  def processImage(update: Update, canBeCached: Boolean): Unit = {
-    if (canBeCached) remember(update) else clearCacheFor(update.subj)
-    processUpdate(update)
+  def processUpdate(update: Update): Unit = {
+    if (update.canBeCached) remember(update) else clearCacheFor(update.subj)
+    publishToClients(update)
   }
 
-  def processFragment(update: Update): Unit = processUpdate(update)
+  def removeRoute(ref: ActorRef): Unit = {
+    val routesToRemove = staticRoutes.collect {
+      case (route, ProviderState(thatRef, false)) if ref == thatRef => route
+    }
+    routesToRemove foreach { route =>
+      logger.info(s"Removing route: $route")
+      collectSubscribers { _.route == route } foreach {
+        case (sub,set) =>
+          publishToClients(Discard(sub))
+          set.foreach(removeSubscriber(_,sub))
+      }
+      context.unwatch(ref)
+      staticRoutes.remove(route);
+    }
+  }
 
-  def messagesFromClientHandler : Receive = {
-    case Subscribe(subj) => addSubscriber(sender(), subj)
-    case Unsubscribe(subj) => removeSubscriber(sender(), subj)
+  def isProviderRef(ref: ActorRef) = staticRoutes.exists {
+    case (route, provState) => provState.ref == ref
+  }
+
+  private def handler : Receive = {
     case Command(subj, data) => publishToProviders(Command(subj, data))
-    case Terminated(ref) => removeSubscriber(ref)
-  }
-
-  def messagesFromProviderHandler : Receive = {
-    case RegisterComponent(mapping) => register(sender(), mapping)
-    case Image(upd: Update, canBeCached) => processImage(upd, canBeCached)
-    case Fragment(upd: Update) => processFragment(upd)
+    case RegisterComponent(route, ref) => register(ref, route)
+    case u : Update => processUpdate(u)
+    case Terminated(ref) if isProviderRef(ref) =>
+      staticRoutes.collect {
+        case (route, thatRef) if ref==thatRef.ref => route
+      } foreach { route =>
+        staticRoutes += (route -> ProviderState(ref,active = false))
+      }
+      logger.info(s"Actor $ref terminated, pending removal in 30 sec")
+      context.system.scheduler.scheduleOnce(30.seconds, self, RemoveIfInactive(ref))
+    case RemoveIfInactive(ref) => removeRoute(ref)
   }
 
 }

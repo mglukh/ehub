@@ -1,4 +1,4 @@
-package nugget.agent
+package nugget.agent.controller.flow
 
 import akka.actor.{Actor, Props}
 import akka.stream.actor.ActorSubscriberMessage.OnNext

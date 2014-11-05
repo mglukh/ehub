@@ -5,7 +5,7 @@
         paths: {
             common: "../lib/common/javascripts",
             jquery: "../lib/jquery/jquery",
-            react: "../lib/react/react",
+            react: "../lib/react/react-with-addons",
             bootstrap: "../lib/bootstrap/js/bootstrap",
 
             subscriberMixin: "tools/AutoSubscribeMixin",

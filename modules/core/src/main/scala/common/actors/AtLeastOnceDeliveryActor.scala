@@ -1,6 +1,6 @@
 package nugget.core.actors
 
-import nugget.agent.{Acknowledge, Acknowledgeable}
+import nugget.agent.shared.{Acknowledge, Acknowledgeable}
 import nugget.core.NowProvider
 
 import scala.concurrent.duration.DurationInt

@@ -8,14 +8,14 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
         mixins: [sendOnlyMixin],
 
         getInitialState: function () {
-            return {connected: false}
+            return {connected: false, a: '12345'}
         },
 
         handleAdd: function(e) {
             var name = this.refs.gateName.getDOMNode().value.trim();
             if (!name) return;
 
-            this.sendCommand("/gates/list/add", {name: name});
+            this.sendCommand("gates", "add", {name: name});
 
             this.refs.gateName.getDOMNode().value = null;
 
@@ -24,10 +24,15 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
         },
 
         render: function () {
+
+            var cx = React.addons.classSet;
+            var buttonClasses = cx({
+                'disabled': !this.state.connected
+            });
+
             return (
               <div>
-
-                  <button type="button" className="btn btn-primary btn-sm" data-toggle="modal" data-target="#myModal">
+                  <button type="button" className={"btn btn-primary btn-sm " + buttonClasses} data-toggle="modal" data-target="#myModal" >
                   Add new
                   </button>
 

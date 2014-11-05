@@ -1,48 +1,69 @@
-define(['wsclient'], function(client) {
+define(['wsclient'], function (client) {
 
     return {
-        subscribe: function(handle) {
-            var id = this.subscriptionId();
-            if (id) {
-                handle.subscribe(id);
-            } else {
-                console.warn("subscriptionId is undefined or returns empty string");
-            }
-        },
-        onDataUpdate: function (data) {
-            this.setState({data: data});
+        onDataUpdate: function (key, data) {
+            var partialStateUpdate = {};
+            partialStateUpdate[key] = data;
+            this.setState(partialStateUpdate);
         },
         startSubscription: function () {
             var self = this;
-            var id = this.subscriptionId();
-            this.listener = {
-                onConnected: function (handle) {
-                    self.setState({connected: true});
-                    console.debug("onConnected() for " + id);
-                    self.subscribe(handle);
-                },
-                onDisconnected: function (handle) {
-                    self.setState({connected: false});
-                    console.debug("onDisconnected() for " + id);
-                },
-                onMessage: function (data) {
-                    console.debug("onMessage() for " + id);
-                    self.onDataUpdate(data);
+            var id = this.subscriptionConfig();
+
+            this.handle = client.getHandle();
+
+            function componentId() {
+                return id.route + "{" + id.topic + "}";
+            }
+
+            function updateHandler(data) {
+                console.debug("onMessage() for " + id);
+                self.onDataUpdate(id.target, data);
+            }
+
+            function subscribe() {
+                if (id) {
+                    self.handle.subscribe(id.route, id.topic, updateHandler);
+                } else {
+                    console.warn("subscriptionId is undefined or returns empty string");
                 }
-            };
-            this.handle = client.addListener(this.listener);
+            }
+
+            function wsOpenHandler() {
+                self.setState({connected: true});
+                console.debug("onConnected() for " + id);
+                subscribe();
+            }
+
+            function wsClosedHandler() {
+                self.setState({connected: false});
+                console.debug("onDisconnected() for " + id);
+            }
+
+            this.handle.addWsOpenEventListener(wsOpenHandler);
+            this.handle.addWsClosedEventListener(wsClosedHandler);
+
+            this.sendCommand = this.handle.command;
+
+            if (this.handle.connected) {
+                subscribe();
+            }
+
             console.debug("Initiated subscription for " + id);
         },
         stopSubscription: function () {
-            this.handle.stop();
+            if (this.handle) {
+                this.handle.stop();
+                this.handle = null;
+            }
         },
-        componentDidMount: function() {
+        componentDidMount: function () {
             this.startSubscription();
             if (this.onMount) {
                 this.onMount();
             }
         },
-        componentWillUnmount: function() {
+        componentWillUnmount: function () {
             this.stopSubscription();
             if (this.onUnmount) {
                 this.onUnmount();

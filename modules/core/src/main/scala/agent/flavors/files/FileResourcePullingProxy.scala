@@ -1,13 +1,10 @@
-package agent.files
+package agent.flavors.files
 
 import java.nio.charset.Charset
 
-import agent.{Cursor, DataChunk, ResourcePullingProxy}
 import akka.actor.Props
-import akka.stream.actor.{ActorPublisherMessage, ActorPublisher}
+import akka.stream.actor.ActorPublisherMessage
 import akka.util.ByteString
-import com.typesafe.scalalogging.LazyLogging
-import nugget.agent.MonitorTarget
 import nugget.core.actors._
 
 import scala.annotation.tailrec

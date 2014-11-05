@@ -1,18 +1,15 @@
 package nugget.agent.controller
 
 import akka.actor.{ActorRef, Props}
-import akka.pattern.{ ask, pipe }
 import akka.stream.scaladsl2.FlowMaterializer
 import com.typesafe.config.Config
-import nugget.agent.controller.flow.{FlowConfigUpdate, SuspendFlowInstance, StartFlowInstance, FlowActor}
+import nugget.agent.controller.flow.{FlowActor, FlowConfigUpdate, StartFlowInstance, SuspendFlowInstance}
 import nugget.agent.controller.storage._
+import nugget.agent.shared.{CreateFlow, Handshake, StartFlow, StopFlow}
 import nugget.core.actors.{ActorWithComposableBehavior, ReconnectingActor}
 import play.api.libs.json.{JsValue, Json}
 
 import scala.collection.mutable
-import scala.concurrent.Await
-import scala.concurrent.duration.DurationLong
-import scala.util.Failure
 
 /**
  * Created by maks on 18/09/14.

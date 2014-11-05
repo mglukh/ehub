@@ -1,12 +1,11 @@
 package hq.gates
 
-import akka.actor.{ActorRef, ActorRefFactory, Props}
+import akka.actor.{Terminated, ActorRef, ActorRefFactory, Props}
 import hq._
 import hq.routing.MessageRouterActor
-import nugget.core.actors.ActorWithComposableBehavior
-import play.api.libs.json.{JsArray, JsValue, Json}
-
-import scala.collection.mutable
+import nugget.core.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
+import play.api.data
+import play.api.libs.json.{JsValue, Json}
 
 
 object GateManagerActor {
@@ -17,53 +16,54 @@ object GateManagerActor {
   def start(implicit f: ActorRefFactory) = f.actorOf(props, id)
 }
 
-class GateManagerActor extends ActorWithComposableBehavior {
+case class GateAvailable(id: String)
 
-  val ListRequest = """/gates/list""".r
-  val ListItemRequest = """/gates/list/(\w+)""".r
-  val CmdAdd = """/gates/list/add""".r
+class GateManagerActor extends ActorWithComposableBehavior
+with ActorWithSubscribers {
 
-  var gates: List[String] = List()
+  val GATES_LIST = Subject("gates", "list")
+
+  var gates: Map[String, ActorRef] = Map()
 
   override def commonBehavior(): Receive = handler orElse super.commonBehavior()
 
   override def preStart(): Unit = {
     super.preStart()
-    MessageRouterActor.path ! RegisterComponent {
-      case Subject(subj, _) if subj.startsWith("/gates/") => true
-      case _ => false
-    }
+    MessageRouterActor.path ! RegisterComponent("gates", self)
   }
 
 
-  def handleSubscribe(subj: String) = subj match {
-    case ListRequest() => Some(Json.toJson(gates.map { x => Json.obj("id" -> x) }.toArray))
-    case ListItemRequest(id) =>
-      context.child(id).foreach(_ ! Subscribe(Subject(subj)))
-      None
+  def list = Some(Json.toJson(gates.keys.map { x => Json.obj("id" -> x)}.toArray))
+
+  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
+    case GATES_LIST => updateTo(subject, ref, list)
   }
 
-  def handleCommand(subj: String, maybeData: Option[JsValue]): JsValue = subj match {
-    case CmdAdd() =>
+
+  def handleCommand(topic: String, maybeData: Option[JsValue]) = topic match {
+    case "add" =>
       for (
         data <- maybeData;
         name <- (data \ "name").asOpt[String]
       ) {
-        gates = gates :+ name
-        GateActor.start(name)
+        val actor = GateActor.start(name)
+        context.watch(actor)
       }
-      Json.toJson(gates.map { x => Json.obj("id" -> x) }.toArray)
   }
 
 
   def handler: Receive = {
-
-    case Subscribe(subj) =>
-      handleSubscribe(subj.route) foreach { x => MessageRouterActor.path ! Image(Update(subj, x)) }
     case Command(subj, data) =>
-      MessageRouterActor.path ! Image(Update(Subject("/gates/list"), handleCommand(subj.route, data)))
-
-
+      handleCommand(subj.topic, data)
+    case GateAvailable(route) =>
+      gates = gates + (route -> sender())
+      updateToAll(GATES_LIST, list)
+    case Terminated(ref) =>
+      gates = gates.filter {
+        case (route,otherRef) => otherRef != ref
+      }
+      updateToAll(GATES_LIST, list)
   }
+
 
 }

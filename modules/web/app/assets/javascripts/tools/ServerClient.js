@@ -2,98 +2,164 @@ define(['jquery'], function (jquery) {
 
     var endpoint = "ws://localhost:9000/socket";
 
-    var sock = new WebSocket(endpoint);
-    var connection = null;
-    var listeners = [];
-    sock.onmessage = function (e) {
-        console.debug("From Websocket: " + e.data);
-        var data = JSON.parse(e.data);
-        listeners.forEach(function (next) {
-            if (next.interestedIn(data.topic)) {
-                next.ref.onMessage(data.payload);
-            }
-        });
-    };
 
-    sock.onopen = function (x) {
-        console.debug("Websocket open at " + endpoint);
-        connection = sock;
-        listeners.forEach(function (next) {
-            next.ref.onConnected(next.handle);
-        });
-    };
+    var reconnectInterval = 3000;
+    var connectionEstablishTimeout = 5000;
+
+    var currentState = WebSocket.CLOSED;
+
+    var attemptsSoFar = 0;
+    var forcedClose = false;
+
+    var listeners = [];
+
+    var sock;
+
+
+    function attemptConnection() {
+        attemptsSoFar++;
+        currentState = WebSocket.CONNECTING;
+
+        sock = new WebSocket(endpoint);
+
+        console.debug("Attempting to connect to " + endpoint);
+
+        var timeout = setTimeout(function () {
+            if (sock) sock.close();
+        }, connectionEstablishTimeout);
+
+        sock.onopen = function (x) {
+            currentState = WebSocket.OPEN;
+            clearTimeout(timeout);
+            console.debug("Websocket open at " + endpoint+" after " + attemptsSoFar +" attempts");
+            attemptsSoFar = 0;
+            connection = sock;
+
+            listeners.forEach(function (next) {
+                if (next.onOpen) next.onOpen();
+            });
+        };
+
+        sock.onclose = function (x) {
+            clearTimeout(timeout);
+            sock = null;
+
+            if (currentState == WebSocket.OPEN) {
+                listeners.forEach(function (next) {
+                    if (next.onClosed) next.onClosed();
+                });
+            }
+
+            currentState = WebSocket.CLOSED;
+
+            if (!forcedClose) {
+                setTimeout(function() {
+                    attemptConnection();
+                }, reconnectInterval);
+            }
+        };
+
+        sock.onmessage = function (e) {
+            console.debug("From Websocket: " + e.data);
+
+            var segments = e.data.split('|');
+            var type = segments[0];
+            var route = segments[1];
+            var topic = segments[2];
+            var payload = segments[3] ? JSON.parse(segments[3]) : false;
+
+            console.debug("From Websocket: " + type + " : " + route + " : " + topic + " : " + payload);
+
+            var eventId = type+"|"+route+"|"+topic;
+
+            listeners.forEach(function (next) {
+                next.onMessage(eventId, payload);
+            });
+
+
+            //if (type == 'U') {
+            //    listeners.forEach(function (next) {
+            //        if (next.interestedIn(route, topic)) {
+            //            console.log("!>>> U -> " + route + "|" + topic);
+            //            next.ref.onMessage(payload);
+            //        }
+            //    });
+            //} else if (type == 'D') {
+            //    listeners.forEach(function (next) {
+            //        if (next.interestedIn(route, topic)) {
+            //            console.log("!>>> D -> " + route + "|" + topic);
+            //            next.ref.onDiscard(payload);
+            //            next.removeInterest(route, topic);
+            //        }
+            //    });
+            //}
+
+        };
+
+    }
 
     function connected() {
-        return connection;
+        return currentState == WebSocket.OPEN;
     }
 
 
-    function sendToServer(payload) {
-        if (connection) {
-            connection.send(JSON.stringify(payload));
+    function sendToServer(type, route, topic, payload) {
+        if (connected()) {
+            sock.send(type + "|" + route + "|" + topic + "|" + (payload ? JSON.stringify(payload) : ""));
             return true;
         } else {
             return false;
         }
     }
 
-
-    function sendCommand(topic, data) {
-        if (sendToServer({type: "cmd", topic: topic, data: data})) {
-            console.debug("Sent command into: " + topic );
-        }
-    }
+    attemptConnection();
 
     return {
-        addListener: function (ref) {
+        getHandle: function () {
 
-            var seed = Math.random().toString(36).substr(2, 10);
-
-            var interest = [];
+            var messageHandlers = {};
 
             var handle = {
-
-                stop: function () {
-                    listeners = listeners.filter(function (next) {
-                        return next.seed != seed;
-                    });
-                    console.log("Stopped: " + seed);
+                //uid: Math.random().toString(36).substr(2, 10),
+                onMessage: function (eventId, payload) {
+                    if (messageHandlers[eventId]) messageHandlers[eventId](payload);
                 },
-                subscribe: function (topic) {
-                    if (sendToServer({type: "sub", topic: topic})) {
-                        interest.push(topic);
-                        console.log("Registered interest: " + topic + " seed: " + seed);
-                    }
+                stop: stopFunc,
+                subscribe: subscribeFunc,
+                unsubscribe: unsubscribeFunc,
+                command: function (route, topic, data) {
+                    return sendToServer("C", route, topic, data);
                 },
-                unsubscribe: function (topic) {
-                    if (sendToServer({type: "unsub", topic: topic})) {
-                        interest = interest.filter(function (next) {
-                            return next != topic;
-                        });
-                        console.log("Unregistered interest: " + topic + " seed: " + seed);
-                    }
+                connected: connected,
+                addWsOpenEventListener: function(callback) {
+                    this.onOpen = callback;
                 },
-                command: sendCommand
+                addWsClosedEventListener: function(callback) {
+                    this.onClosed = callback;
+                }
             };
 
-            var struc = {
-                ref: ref,
-                seed: seed,
-                interestedIn: function (val) {
-                    return $.inArray(val, interest) > -1;
-                },
-                handle: handle
-            };
-
-
-            listeners.push(struc);
-
-            if (connection !== null) {
-                ref.onConnected(handle);
-            } else {
-                ref.onDisconnected(handle);
+            function stopFunc() {
+                listeners = listeners.filter(function (next) {
+                    return next != handle;
+                });
             }
 
+            function subscribeFunc(route, topic, callback) {
+                if (sendToServer("S", route, topic, false)) {
+                    console.log("Registered interest: {" + route + "}" + topic);
+                    messageHandlers["U|"+route+"|"+topic] = callback;
+                }
+            }
+
+            function unsubscribeFunc(route, topic, callback) {
+                if (sendToServer("U", route, topic, false)) {
+                    console.log("Unregistered interest: {" + route + "}" + topic);
+                    messageHandlers["U|"+route+"|"+topic] = null;
+                }
+            }
+
+            listeners.push(handle);
 
             return handle;
 
