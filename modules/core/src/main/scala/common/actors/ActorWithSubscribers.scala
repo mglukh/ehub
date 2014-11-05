@@ -1,6 +1,7 @@
-package nugget.core.actors
+package common.actors
 
-import akka.actor.{Terminated, ActorRef}
+import akka.actor.{Actor, Terminated, ActorRef}
+import common.actors.ActorWithComposableBehavior
 import hq.{Update, Unsubscribe, Subject, Subscribe}
 import play.api.libs.json.JsValue
 
@@ -16,7 +17,7 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
 
   private var watchedSubscribers : mutable.Set[ActorRef] = mutable.HashSet()
 
-  override def commonBehavior(): Receive = handleMessages orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = handleMessages orElse super.commonBehavior()
 
   def firstSubscriber(subject: Subject) = {}
   def lastSubscriberGone(subject: Subject) = {}

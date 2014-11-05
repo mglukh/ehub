@@ -1,8 +1,8 @@
-package nugget.core.actors
+package common.actors
 
 import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage.Cancel
-import nugget.core.Stop
+import common.Stop
 
 trait ShutdownablePublisherActor[T] extends ActorPublisher[T] with ActorWithComposableBehavior {
 

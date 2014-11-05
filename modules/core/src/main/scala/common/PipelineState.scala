@@ -1,4 +1,4 @@
-package nugget.core
+package common
 
 sealed trait PipelineStateChangeRequest
 

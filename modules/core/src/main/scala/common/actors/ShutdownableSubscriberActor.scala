@@ -1,8 +1,8 @@
-package nugget.core.actors
+package common.actors
 
 import akka.stream.actor.ActorSubscriber
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnError}
-import nugget.core.Stop
+import common.Stop
 
 trait ShutdownableSubscriberActor extends ActorSubscriber with ActorWithComposableBehavior {
 

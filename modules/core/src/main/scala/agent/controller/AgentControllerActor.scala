@@ -1,13 +1,15 @@
-package nugget.agent.controller
+package agent.controller
 
+import agent.controller.storage._
+import agent.shared.{StopFlow, StartFlow, CreateFlow, Handshake}
 import akka.actor.{ActorRef, Props}
 import akka.stream.scaladsl2.FlowMaterializer
 import com.typesafe.config.Config
-import nugget.agent.controller.flow.{FlowActor, FlowConfigUpdate, StartFlowInstance, SuspendFlowInstance}
-import nugget.agent.controller.storage._
-import nugget.agent.shared.{CreateFlow, Handshake, StartFlow, StopFlow}
-import nugget.core.actors.{ActorWithComposableBehavior, ReconnectingActor}
+import agent.controller.flow.{FlowActor, FlowConfigUpdate, StartFlowInstance, SuspendFlowInstance}
+import common.actors.{ReconnectingActor, ActorWithComposableBehavior}
+import common.actors.ReconnectingActor
 import play.api.libs.json.{JsValue, Json}
+import net.ceedubs.ficus.Ficus._
 
 import scala.collection.mutable
 
@@ -30,7 +32,7 @@ class AgentControllerActor(implicit config: Config)
 
   val flowActors : mutable.Map[Long, ActorRef] = mutable.HashMap()
 
-  override def connectionEndpoint: String = "akka.tcp://HQ@localhost:2552/user/hq"
+  override def connectionEndpoint: String = config.as[String]("agent.hq.endpoint")
 
   override def preStart(): Unit = {
     initiateReconnect()

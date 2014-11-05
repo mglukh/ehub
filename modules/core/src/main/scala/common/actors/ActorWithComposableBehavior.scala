@@ -1,7 +1,7 @@
-package nugget.core.actors
+package common.actors
 
 import akka.actor.Actor
-import com.typesafe.scalalogging.{StrictLogging, LazyLogging}
+import com.typesafe.scalalogging.StrictLogging
 
 trait ActorWithComposableBehavior extends Actor with StrictLogging {
 

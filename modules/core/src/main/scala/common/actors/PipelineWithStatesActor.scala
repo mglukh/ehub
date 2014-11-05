@@ -1,7 +1,7 @@
-package nugget.core.actors
+package common.actors
 
-import nugget.core.{BecomeActive, BecomePassive}
-
+import akka.actor.Actor
+import common.{BecomePassive, BecomeActive}
 
 
 trait PipelineWithStatesActor extends ActorWithComposableBehavior {
@@ -19,9 +19,9 @@ trait PipelineWithStatesActor extends ActorWithComposableBehavior {
   def becomePassive() : Unit = {}
 
 
-  override def commonBehavior(): Receive = handlePipelineStateChanges orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = handlePipelineStateChanges orElse super.commonBehavior()
 
-  private def handlePipelineStateChanges : Receive = {
+  private def handlePipelineStateChanges : Actor.Receive = {
     case BecomeActive() =>
       logger.debug("Becoming active")
       requestedState = Some(Active())

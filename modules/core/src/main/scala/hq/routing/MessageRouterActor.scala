@@ -1,14 +1,11 @@
 package hq.routing
 
-import akka.actor
-import akka.actor.FSM.->
 import akka.actor._
+import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
 import hq._
-import nugget.core.actors.{ActorWithSubscribers, ActorWithComposableBehavior}
 
-import scala.collection.immutable.HashSet
 import scala.collection.mutable
-import scala.concurrent.duration.{DurationLong, Duration}
+import scala.concurrent.duration.DurationLong
 
 
 object MessageRouterActor {
@@ -31,7 +28,7 @@ class MessageRouterActor extends ActorWithComposableBehavior
 
   implicit val ec  = context.dispatcher
 
-  override def commonBehavior(): Receive = handler orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
 
   override def firstSubscriber(subject: Subject): Unit = {
     publishToProviders(Subscribe(subject))

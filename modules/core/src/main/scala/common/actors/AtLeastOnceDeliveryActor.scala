@@ -1,7 +1,7 @@
-package nugget.core.actors
+package common.actors
 
-import nugget.agent.shared.{Acknowledge, Acknowledgeable}
-import nugget.core.NowProvider
+import agent.shared.{Acknowledge, Acknowledgeable}
+import common.NowProvider
 
 import scala.concurrent.duration.DurationInt
 

@@ -1,4 +1,4 @@
-package nugget.core.actors
+package common.actors
 
 import akka.actor.ActorRef
 

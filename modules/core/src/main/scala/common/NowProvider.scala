@@ -1,4 +1,4 @@
-package nugget.core
+package common
 
 trait NowProvider {
 

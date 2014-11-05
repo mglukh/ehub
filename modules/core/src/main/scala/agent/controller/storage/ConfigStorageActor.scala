@@ -1,8 +1,8 @@
-package nugget.agent.controller.storage
+package agent.controller.storage
 
-import akka.actor.Props
+import akka.actor.{Actor, Props}
 import com.typesafe.config.Config
-import nugget.core.actors.ActorWithComposableBehavior
+import common.actors.ActorWithComposableBehavior
 
 /**
  * Created by maks on 22/09/2014.
@@ -36,7 +36,7 @@ class ConfigStorageActor(implicit config: Config) extends ActorWithComposableBeh
     logger.info(s"Creating DB in ${config.getString("agent.storage.directory")}, provider $storage")
   }
 
-  override def commonBehavior(): Receive = super.commonBehavior orElse {
+  override def commonBehavior(): Actor.Receive = super.commonBehavior orElse {
     case StoreConfig(FlowConfig(flowId, c, s)) =>
       logger.debug(s"Persisted config and state for flow $flowId")
       storage.store(flowId, c, s)

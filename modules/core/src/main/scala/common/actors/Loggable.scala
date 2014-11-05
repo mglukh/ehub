@@ -1,3 +1,3 @@
-package nugget.core.actors
+package common.actors
 
 trait Loggable

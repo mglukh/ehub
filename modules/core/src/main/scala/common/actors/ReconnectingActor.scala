@@ -1,8 +1,8 @@
-package nugget.core.actors
+package common.actors
 
 import akka.actor.{Actor, ActorRef}
 import akka.remote.DisassociatedEvent
-import com.typesafe.scalalogging.{StrictLogging, LazyLogging}
+import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.util.{Failure, Success}

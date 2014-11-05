@@ -1,9 +1,12 @@
-package nugget.agent.controller.flow
+package agent.controller.flow
 
-import akka.actor.Props
+import akka.actor.Actor.Receive
+import akka.actor.{Actor, Props}
 import akka.stream.actor.ActorSubscriberMessage.OnNext
 import akka.stream.actor.{RequestStrategy, WatermarkRequestStrategy, ZeroRequestStrategy}
-import nugget.core.actors.{Acknowledged, ActorWithComposableBehavior, PipelineWithStatesActor, ShutdownableSubscriberActor}
+import common.actors.{Acknowledged, PipelineWithStatesActor, ShutdownableSubscriberActor, ActorWithComposableBehavior}
+
+import scala.concurrent.stm.Txn.Active
 
 /**
  * Created by maks on 21/09/2014.
@@ -26,7 +29,7 @@ class BlackholeAutoAckSinkActor
   }
 
 
-  override def commonBehavior(): Receive = super.commonBehavior() orElse {
+  override def commonBehavior(): Actor.Receive = super.commonBehavior() orElse {
     case OnNext(msg) => context.parent ! Acknowledged[Any](-1, msg)
   }
 

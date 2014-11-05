@@ -5,7 +5,7 @@ import java.nio.charset.Charset
 import akka.actor.Props
 import akka.stream.actor.ActorPublisherMessage
 import akka.util.ByteString
-import nugget.core.actors._
+import common.actors.{ActorWithComposableBehavior, ActorWithTicks, PipelineWithStatesActor, ShutdownablePublisherActor}
 
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext

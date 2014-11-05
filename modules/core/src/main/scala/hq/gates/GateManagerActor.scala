@@ -1,10 +1,9 @@
 package hq.gates
 
-import akka.actor.{Terminated, ActorRef, ActorRefFactory, Props}
+import akka.actor._
+import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
 import hq._
 import hq.routing.MessageRouterActor
-import nugget.core.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
-import play.api.data
 import play.api.libs.json.{JsValue, Json}
 
 
@@ -25,7 +24,7 @@ with ActorWithSubscribers {
 
   var gates: Map[String, ActorRef] = Map()
 
-  override def commonBehavior(): Receive = handler orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
 
   override def preStart(): Unit = {
     super.preStart()

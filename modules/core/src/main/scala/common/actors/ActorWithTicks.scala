@@ -1,4 +1,6 @@
-package nugget.core.actors
+package common.actors
+
+import common.actors.ActorWithComposableBehavior
 
 import scala.concurrent.duration.DurationLong
 

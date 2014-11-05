@@ -1,9 +1,9 @@
-package nugget.agent.controller.flow
+package agent.controller.flow
 
 import akka.actor.{Actor, Props}
 import akka.stream.actor.ActorSubscriberMessage.OnNext
 import akka.stream.actor.{MaxInFlightRequestStrategy, RequestStrategy}
-import nugget.core.actors._
+import common.actors._
 
 object SubscriberBoundaryInitiatingActor {
   def props(endpoint: String) = Props(new SubscriberBoundaryInitiatingActor(endpoint))
@@ -21,7 +21,7 @@ class SubscriberBoundaryInitiatingActor(endpoint: String)
 
   override def connectionEndpoint: String = endpoint
 
-  private def handleOnNext: Receive = {
+  private def handleOnNext: Actor.Receive = {
     case OnNext(x) =>
       logger.info(s"Next: $x")
       deliverMessage(x)

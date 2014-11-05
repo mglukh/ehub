@@ -1,11 +1,11 @@
 package hq.gates
 
-import akka.actor.{PoisonPill, ActorRef, ActorRefFactory, Props}
+import akka.actor._
+import common.{BecomeActive, BecomePassive}
+import common.actors.{ActorWithSubscribers, PipelineWithStatesActor}
 import hq._
 import hq.routing.MessageRouterActor
-import nugget.core.{BecomeActive, BecomePassive}
-import nugget.core.actors.{ActorWithSubscribers, PipelineWithStatesActor}
-import play.api.libs.json.{JsString, Json}
+import play.api.libs.json.Json
 
 object GateActor {
   def props(id: String) = Props(new GateActor(id))
@@ -31,7 +31,7 @@ class GateActor(id: String) extends PipelineWithStatesActor with ActorWithSubscr
     context.parent ! GateAvailable(route)
   }
 
-  override def commonBehavior(): Receive = commandHandler orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = commandHandler orElse super.commonBehavior()
 
   override def becomeActive(): Unit = {
     active = true

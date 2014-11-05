@@ -1,4 +1,4 @@
-package nugget.agent.shared
+package agent.shared
 
 import play.api.libs.json.JsValue
 

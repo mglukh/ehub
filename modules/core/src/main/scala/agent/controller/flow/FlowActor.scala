@@ -1,16 +1,17 @@
-package nugget.agent.controller.flow
+package agent.controller.flow
 
 import java.nio.charset.Charset
 
 import agent.flavors.files._
+import agent.shared.MessageWithAttachments
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.{ActorPublisher, ActorSubscriber}
 import akka.stream.scaladsl2._
 import akka.util.ByteString
-import nugget.agent.shared.MessageWithAttachments
-import nugget.core.actors.{Acknowledged, ActorWithComposableBehavior}
-import nugget.core.{BecomeActive, BecomePassive}
+import common.{BecomeActive, BecomePassive}
+import common.actors.{Acknowledged, ActorWithComposableBehavior}
 import play.api.libs.json._
+import play.api.libs.json.extensions._
 
 
 object FlowActor {
@@ -38,7 +39,6 @@ class FlowActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit 
 
     import play.api.libs.json.Reads._
     import play.api.libs.json._
-    import play.api.libs.json.extensions._
 
     logger.info(s"Creating flow $flowId, config $config, initial state $state")
 
