@@ -1,15 +1,14 @@
 package common.actors
 
 import akka.actor.Address
-import akka.cluster.{MemberStatus, Cluster}
+import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
-import hq.RegisterComponent
-import hq.cluster.NodeInfo
-import hq.routing.MessageRouterActor
 
 
 sealed trait NodeState
+
 case class Up() extends NodeState
+
 case class Unreachable() extends NodeState
 
 case class NodeInfo(state: NodeState, address: Address, roles: Set[String]) extends Comparable[NodeInfo] {
@@ -32,18 +31,23 @@ trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
       classOf[MemberEvent], classOf[UnreachableMember], classOf[ReachableMember])
   }
+
   override def postStop(): Unit = {
     cluster.unsubscribe(self)
     super.postStop()
   }
 
   def onClusterMemberUp(info: NodeInfo): Unit = {}
+
   def onClusterMemberUnreachable(info: NodeInfo): Unit = {}
+
   def onClusterMemberReachable(info: NodeInfo): Unit = {}
+
   def onClusterMemberRemoved(info: NodeInfo): Unit = {}
+
   def onClusterChangeEvent(): Unit = {}
 
-  private def commonMessagesHandler:Receive = {
+  private def commonMessagesHandler: Receive = {
     case MemberUp(member) =>
       logger.info(s"Member is up: $member")
       val newNode = NodeInfo(Up(), member.address, member.roles)
@@ -53,7 +57,7 @@ trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
     case UnreachableMember(member) =>
       logger.info(s"Member is unreachable: $member")
       nodes = nodes.map {
-        case b if b.address==member.address => b.copy(state = Unreachable())
+        case b if b.address == member.address => b.copy(state = Unreachable())
         case b => b
       }
       nodes.collectFirst {
@@ -63,7 +67,7 @@ trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
     case ReachableMember(member) =>
       logger.info(s"Member is reachable: $member")
       nodes = nodes.map {
-        case b if b.address==member.address => b.copy(state = Up())
+        case b if b.address == member.address => b.copy(state = Up())
         case b => b
       }
       nodes.collectFirst {

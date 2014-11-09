@@ -34,13 +34,11 @@ object Common {
   )
 
   val commonDependencies = Seq(
-    cache,
-    anorm,
-    ws,
     "com.googlecode.scalascriptengine" %% "scalascriptengine" % "1.3.10",
     "org.scala-lang" % "scala-compiler" % "2.11.1",
     "org.codehaus.groovy" % "groovy-all" % "2.3.6",
     "com.typesafe.akka" %% "akka-actor" % "2.3.6",
+    "com.typesafe.akka" %% "akka-slf4j" % "2.3.6",
     "com.typesafe.akka" %% "akka-remote" % "2.3.6",
     "com.typesafe.akka" %% "akka-cluster" % "2.3.6",
     "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.6",
