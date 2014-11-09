@@ -12,10 +12,10 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
         },
 
         handleStop: function(e) {
-            this.sendCommand(this.props.route, "stop", {});
+            this.sendCommand(this.props.addr, this.props.route, "stop", {});
         },
         handleStart: function(e) {
-            this.sendCommand(this.props.route, "start", {});
+            this.sendCommand(this.props.addr, this.props.route, "start", {});
         },
 
         render: function () {

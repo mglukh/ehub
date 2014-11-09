@@ -15,7 +15,7 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
             var name = this.refs.gateName.getDOMNode().value.trim();
             if (!name) return;
 
-            this.sendCommand("gates", "add", {name: name});
+            this.sendCommand(this.props.addr, "gates", "add", {name: name});
 
             this.refs.gateName.getDOMNode().value = null;
 

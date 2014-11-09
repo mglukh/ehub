@@ -14,7 +14,7 @@ define([
             mixins: [subscriberMixin],
 
             subscriptionConfig: function () {
-                return {route: this.props.id, topic: 'info', target: 'info'};
+                return {address: this.props.addr, route: this.props.id, topic: 'info', target: 'info'};
             },
             getInitialState: function () {
                 return {info: null}
@@ -24,8 +24,8 @@ define([
                 return (
                     <div>
                     {this.state.info.name} : {this.state.info.text} :
-                        <StartStopButton state={this.state.info.state} route={this.props.id} /> :
-                        <DeleteButton route={this.props.id} /> :
+                        <StartStopButton addr={this.props.addr} state={this.state.info.state} route={this.props.id} /> :
+                        <DeleteButton addr={this.props.addr} route={this.props.id} /> :
                     </div>
                 );
             },

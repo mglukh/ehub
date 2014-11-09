@@ -12,7 +12,7 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
         },
 
         handleKill: function(e) {
-            this.sendCommand(this.props.route, "kill", {});
+            this.sendCommand(this.props.addr, this.props.route, "kill", {});
         },
 
         render: function () {

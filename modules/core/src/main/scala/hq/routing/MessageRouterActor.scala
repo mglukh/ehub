@@ -1,7 +1,8 @@
 package hq.routing
 
 import akka.actor._
-import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
+import akka.cluster.Cluster
+import common.actors.{NodeInfo, ActorWithClusterAwareness, ActorWithComposableBehavior, ActorWithSubscribers}
 import hq._
 
 import scala.collection.mutable
@@ -14,9 +15,9 @@ object MessageRouterActor {
 
   def id = "router"
 
-  def start(implicit f: ActorRefFactory) = f.actorOf(props, id)
+  def start(implicit f: ActorRefFactory, cluster: Cluster) = f.actorOf(props, id)
 
-  def props = Props(new MessageRouterActor())
+  def props(implicit cluster: Cluster) = Props(new MessageRouterActor())
 }
 
 
@@ -24,9 +25,12 @@ case class ProviderState(ref: ActorRef, active: Boolean)
 
 case class RemoveIfInactive(ref: ActorRef)
 
-class MessageRouterActor
+class MessageRouterActor(implicit val cluster: Cluster)
   extends ActorWithComposableBehavior
-  with ActorWithSubscribers {
+  with ActorWithSubscribers
+  with ActorWithClusterAwareness {
+
+  def myNodeIsTarget(subj: Subject) = subj.address == myAddress
 
   val updatesCache: mutable.Map[Subject, Update] = new mutable.HashMap[Subject, Update]()
   val staticRoutes: mutable.Map[String, ProviderState] = new mutable.HashMap[String, ProviderState]()
@@ -34,6 +38,26 @@ class MessageRouterActor
   implicit val ec = context.dispatcher
 
   override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
+
+
+  override def onClusterMemberUp(info: NodeInfo): Unit = {
+    collectSubjects(_.address==info.address.toString).foreach { subj =>
+      forwardToClusterNode(info.address.toString,Subscribe(subj))
+    }
+  }
+
+
+  override def onClusterMemberRemoved(info: NodeInfo): Unit = {
+    collectSubjects(_.address == info.address.toString).foreach { subj =>
+      publishToClients(Stale(subj))
+    }
+  }
+
+  override def onClusterMemberUnreachable(info: NodeInfo): Unit = {
+    collectSubjects(_.address == info.address.toString).foreach { subj =>
+      publishToClients(Stale(subj))
+    }
+  }
 
   private def handler: Receive = {
     case Command(subj, data) => publishToProviders(Command(subj, data))
@@ -50,13 +74,18 @@ class MessageRouterActor
     case RemoveIfInactive(ref) => removeRoute(ref)
   }
 
+
   def publishToProviders(msg: HQCommMsg): Unit = {
     val route = msg.subj.route
-    staticRoutes.get(route) match {
-      case Some(ProviderState(ref, true)) => ref ! msg
-      case Some(ProviderState(ref, false)) =>
-        logger.debug(s"Route $route is inactive, message dropped")
-      case None => logger.warn(s"Unknown route $route, message dropped")
+    if (myNodeIsTarget(msg.subj)) {
+      forwardToClusterNode(msg.subj.address, msg)
+    } else {
+      staticRoutes.get(route) match {
+        case Some(ProviderState(ref, true)) => ref ! msg
+        case Some(ProviderState(ref, false)) =>
+          logger.debug(s"Route $route is inactive, message dropped")
+        case None => logger.warn(s"Unknown route $route, message dropped")
+      }
     }
   }
 
@@ -64,7 +93,7 @@ class MessageRouterActor
     staticRoutes += route -> ProviderState(ref, active = true)
     context.watch(ref)
     logger.info(s"Registered new static route $route -> $ref")
-    collectSubjects(_.route == route).foreach { subj =>
+    collectSubjects{ subj => subj.route == route && myNodeIsTarget(subj)}.foreach { subj =>
       logger.info(s"Subscribing to $subj with downstream component")
       publishToProviders(Subscribe(subj))
     }
@@ -91,11 +120,10 @@ class MessageRouterActor
     routesToRemove foreach { route =>
       logger.info(s"Removing route: $route")
       
-      collectSubscribers {
-        _.route == route
-      } foreach {
-        case (sub, set) =>
-          publishToClients(Stale(sub))
+      collectSubjects { subj =>
+          subj.route == route && myNodeIsTarget(subj)
+      } foreach { subj =>
+          publishToClients(Stale(subj))
       }
       context.unwatch(ref)
       staticRoutes.remove(route);
@@ -115,7 +143,8 @@ class MessageRouterActor
     clearCacheFor(subject)
   }
 
-  override def processUnsubscribeRequest(ref: ActorRef, subject: Subject): Unit = {}
+  override def processUnsubscribeRequest(ref: ActorRef, subject: Subject): Unit = {
+  }
 
   override def processSubscribeRequest(ref: ActorRef, subject: Subject): Unit = {
     updatesCache.get(subject) foreach (ref ! _)

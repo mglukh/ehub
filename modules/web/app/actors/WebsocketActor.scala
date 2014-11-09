@@ -1,7 +1,7 @@
 package actors
 
 import akka.actor.{Actor, ActorRef, Props}
-import common.actors.ActorWithComposableBehavior
+import common.actors.{ActorWithClusterAwareness, ActorWithComposableBehavior}
 import hq._
 import hq.routing.MessageRouterActor
 import play.api.libs.json.{JsValue, Json}
@@ -27,14 +27,14 @@ class WebsocketActor(out: ActorRef)
   override def commonBehavior(): Actor.Receive = clientMessages orElse serverMessages orElse super.commonBehavior()
 
   def serverMessages: Actor.Receive = {
-    case Update(Subject(subj, topic), data, _) =>
-      path2alias.get(subj + "|" + topic) foreach { alias =>
+    case Update(Subject(address, subj, topic), data, _) =>
+      path2alias.get(address + "|" + subj + "|" + topic) foreach { alias =>
         val value: String = "U" + alias + "|" + data.toString()
         out ! value
       }
 
-    case Stale(Subject(subj, topic)) =>
-      path2alias.get(subj + "|" + topic) foreach { alias =>
+    case Stale(Subject(address, subj, topic)) =>
+      path2alias.get(address + "|" + subj + "|" + topic) foreach { alias =>
         val value: String = "D" + alias + "|"
         out ! value
       }
@@ -67,8 +67,8 @@ class WebsocketActor(out: ActorRef)
 
   def processClientRequest(msgType: Char, x: String) = {
     x.split('|') match {
-      case Array(route, topic) =>
-        val subj = Subject(route, topic)
+      case Array(address, route, topic) =>
+        val subj = Subject(address, route, topic)
         val msg = msgType match {
           case 'S' => Some(Subscribe(subj))
           case 'U' => Some(Unsubscribe(subj))
@@ -77,8 +77,8 @@ class WebsocketActor(out: ActorRef)
             None
         }
         msg foreach (MessageRouterActor.path ! _)
-      case Array(route, topic, payload) =>
-        val subj = Subject(route, topic)
+      case Array(address, route, topic, payload) =>
+        val subj = Subject(address, route, topic)
         val msg = msgType match {
           case 'C' => Some(Command(subj, Json.parse(payload).asOpt[JsValue]))
           case _ =>

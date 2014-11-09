@@ -5,7 +5,7 @@ define(['react', 'subscriberMixin', 'admin/gate/ListItem'], function (React, sub
         mixins: [subscriberMixin],
 
         subscriptionConfig: function () {
-            return {route:'gates', topic:'list', target: 'list'};
+            return {address: this.props.addr, route:'gates', topic:'list', target: 'list'};
         },
         getInitialState: function () {
             return {data: null}
@@ -15,7 +15,7 @@ define(['react', 'subscriberMixin', 'admin/gate/ListItem'], function (React, sub
             return (
                 <div>
                 {this.state.list.map(function (el) {
-                    return <ListItem key={el.id} id={el.id}/>;
+                    return <ListItem addr={this.props.addr} key={el.id} id={el.id}/>;
                     })}
                 </div>
             );

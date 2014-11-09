@@ -80,12 +80,13 @@ define(['jquery'], function (jquery) {
             console.debug("Alias conversion: " + aliasAndData[0] + " -> " + path);
 
             var segments = path.split('|');
-            var route = segments[0];
-            var topic = segments[1];
+            var address = segments[0];
+            var route = segments[1];
+            var topic = segments[2];
 
-            console.debug("From Websocket: " + type + " : " + route + " : " + topic + " : " + payload);
+            console.debug("From Websocket: " + type + " : " + address + " : " + route + " : " + topic + " : " + payload);
 
-            var eventId = route + "|" + topic;
+            var eventId = address + "|" + route + "|" + topic;
 
             listeners.forEach(function (next) {
                 next.onMessage(eventId, type, payload);
@@ -100,9 +101,9 @@ define(['jquery'], function (jquery) {
     }
 
 
-    function sendToServer(type, route, topic, payload) {
+    function sendToServer(type, address, route, topic, payload) {
         if (connected()) {
-            var key = route + "|" + topic;
+            var key = address + "|" + route + "|" + topic;
             if (!key2alias[key]) {
                 aliasCounter++;
 
@@ -137,8 +138,8 @@ define(['jquery'], function (jquery) {
                 stop: stopFunc,
                 subscribe: subscribeFunc,
                 unsubscribe: unsubscribeFunc,
-                command: function (route, topic, data) {
-                    return sendToServer("C", route, topic, data);
+                command: function (address, route, topic, data) {
+                    return sendToServer("C", address, route, topic, data);
                 },
                 connected: connected,
                 addWsOpenEventListener: function (callback) {
@@ -155,17 +156,17 @@ define(['jquery'], function (jquery) {
                 });
             }
 
-            function subscribeFunc(route, topic, callback) {
-                if (sendToServer("S", route, topic, false)) {
+            function subscribeFunc(address, route, topic, callback) {
+                if (sendToServer("S", address, route, topic, false)) {
                     console.log("Registered interest: {" + route + "}" + topic);
-                    messageHandlers[route + "|" + topic] = callback;
+                    messageHandlers[address + "|" + route + "|" + topic] = callback;
                 }
             }
 
-            function unsubscribeFunc(route, topic, callback) {
-                if (sendToServer("U", route, topic, false)) {
+            function unsubscribeFunc(address, route, topic, callback) {
+                if (sendToServer("U", address, route, topic, false)) {
                     console.log("Unregistered interest: {" + route + "}" + topic);
-                    messageHandlers[route + "|" + topic] = null;
+                    messageHandlers[address + "|" + route + "|" + topic] = null;
                 }
             }
 

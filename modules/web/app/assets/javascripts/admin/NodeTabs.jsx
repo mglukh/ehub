@@ -5,7 +5,7 @@ define(['react', 'subscriberMixin', 'admin/AdminContainer'], function (React, su
         mixins: [subscriberMixin],
 
         subscriptionConfig: function () {
-            return {route:'cluster', topic:'nodes', target: 'nodes'};
+            return {address:'akka.tcp://ehubhq@localhost:2552', route:'cluster', topic:'nodes', target: 'nodes'};
         },
         getInitialState: function () {
             return {nodes: null}
@@ -29,7 +29,7 @@ define(['react', 'subscriberMixin', 'admin/AdminContainer'], function (React, su
                             return  <li key={el.id} role="presentation" className={tabClasses}><a href="#">{el.address} ({el.state})</a></li>;
                             })}
                     </ul>
-                    <Container />
+                    <Container addr='akka.tcp://ehubhq@localhost:2551' />
                 </div>
             );
         },

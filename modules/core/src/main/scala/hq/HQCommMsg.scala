@@ -7,7 +7,7 @@ trait HQCommMsg {
   val subj: Subject
 }
 
-case class Subject(route: String, topic: String)
+case class Subject(address: String, route: String, topic: String)
 
 case class Subscribe(subj: Subject) extends HQCommMsg
 case class Unsubscribe(subj: Subject) extends HQCommMsg

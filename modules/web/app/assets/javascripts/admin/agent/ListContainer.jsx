@@ -11,7 +11,7 @@ define(['react', 'admin/agent/List'],
         render: function () {
             return (
                 <div>
-                    <List/>
+                    <List addr={this.props.addr} />
                 </div>
             )
         }

@@ -11,9 +11,9 @@ define(['react','admin/gate/ListContainer','admin/agent/ListContainer'],
         render: function () {
             return (
                 <div>
-                    <GatesContainer />
+                    <GatesContainer addr={this.props.addr} />
                     <hr/>
-                    <AgentsContainer/>
+                    <AgentsContainer addr={this.props.addr} />
                 </div>
             )
         }

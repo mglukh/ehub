@@ -17,7 +17,7 @@ define(['wsclient'], function (client) {
 
         updateHandler: function (type, data) {
             var id = this.subscriptionConfig();
-            console.debug("onMessage() type " + type + " for " + id.route + "{" + id.topic + "}");
+            console.debug("onMessage() type " + type + " for " + id.route + "{" + id.topic + "}@" + id.address);
             var staleKey = id.target+"_stale";
             if (type == "D") {
                 this.onStaleUpdate(id.target, true);
@@ -34,12 +34,12 @@ define(['wsclient'], function (client) {
             this.handle = client.getHandle();
 
             function componentId() {
-                return id.route + "{" + id.topic + "}";
+                return id.route + "{" + id.topic + "}@" + id.address;
             }
 
             function subscribe() {
                 if (id) {
-                    self.handle.subscribe(id.route, id.topic, self.updateHandler);
+                    self.handle.subscribe(id.address, id.route, id.topic, self.updateHandler);
                 } else {
                     console.warn("subscriptionId is undefined or returns empty string");
                 }
@@ -47,13 +47,13 @@ define(['wsclient'], function (client) {
 
             function wsOpenHandler() {
                 self.setState({connected: true});
-                console.debug("onConnected() for " + id);
+                console.debug("onConnected() for " + this.componentId());
                 subscribe();
             }
 
             function wsClosedHandler() {
                 self.setState({connected: false});
-                console.debug("onDisconnected() for " + id);
+                console.debug("onDisconnected() for " + this.componentId());
             }
 
             this.handle.addWsOpenEventListener(wsOpenHandler);
@@ -68,13 +68,13 @@ define(['wsclient'], function (client) {
                 wsClosedHandler();
             }
 
-            console.debug("Initiated subscription for " + id);
+            console.debug("Initiated subscription for " + this.componentId());
         },
         stopSubscription: function () {
             if (this.handle) {
                 var id = this.subscriptionConfig();
 
-                this.handle.unsubscribe(id.route, id.topic, this.updateHandler);
+                this.handle.unsubscribe(id.address, id.route, id.topic, this.updateHandler);
 
                 this.handle.stop();
                 this.handle = null;

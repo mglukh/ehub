@@ -11,8 +11,8 @@ define(['react', 'admin/gate/List', 'admin/gate/AddButton'],
         render: function () {
             return (
                 <div>
-                    <AddButton />
-                    <List/>
+                    <AddButton addr={this.props.addr} />
+                    <List addr={this.props.addr} />
                 </div>
             )
         }
