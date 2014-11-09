@@ -1,8 +1,7 @@
 package common.actors
 
-import akka.actor.{Actor, Terminated, ActorRef}
-import common.actors.ActorWithComposableBehavior
-import hq.{Update, Unsubscribe, Subject, Subscribe}
+import akka.actor.{Actor, ActorRef, Terminated}
+import hq.{Subject, Subscribe, Unsubscribe, Update}
 import play.api.libs.json.JsValue
 
 import scala.collection.immutable.HashSet
@@ -36,6 +35,7 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
   def updateToAll(subj: Subject, data: Option[JsValue]) =
     subscribersFor(subj).foreach { set =>
       set.foreach { ref =>
+        logger.debug(s"update on $subj -> $ref")
         updateTo(subj, ref, data)
       }
     }

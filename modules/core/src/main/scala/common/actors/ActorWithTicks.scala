@@ -1,7 +1,5 @@
 package common.actors
 
-import common.actors.ActorWithComposableBehavior
-
 import scala.concurrent.duration.DurationLong
 
 trait ActorWithTicks extends ActorWithComposableBehavior {

@@ -1,10 +1,11 @@
 package hq.agents
 
 import agent.shared.Handshake
-import akka.actor.{ActorRef, Actor, ActorRefFactory, Props}
+import akka.actor._
+import akka.remote.DisassociatedEvent
 import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
-import hq.{RegisterComponent, Subject}
 import hq.routing.MessageRouterActor
+import hq.{RegisterComponent, Subject}
 import play.api.libs.json.Json
 
 object AgentsManagerActor {
@@ -19,33 +20,34 @@ case class AgentAvailable(id: String)
 
 
 class AgentsManagerActor extends ActorWithComposableBehavior with ActorWithSubscribers {
-  override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
-
   val AGENTS_LIST = Subject("agents", "list")
-
   var agents: Map[String, ActorRef] = Map()
 
-  override def preStart(): Unit = {
-    super.preStart()
-    MessageRouterActor.path ! RegisterComponent("agents", self)
-  }
+  override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
 
-
-  def list = Some(Json.toJson(agents.keys.map { x => Json.obj("id" -> x)}.toArray))
-
-  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
-    case AGENTS_LIST => updateTo(subject, ref, list)
-  }
-
-
-
-  private def handler : Receive = {
+  private def handler: Receive = {
     case Handshake(name) =>
       logger.info("Received handshake from " + sender())
-      AgentProxyActor.start(name, sender())
+      context.watch(AgentProxyActor.start(name, sender()))
     case AgentAvailable(name) =>
       agents = agents + (name -> sender())
       updateToAll(AGENTS_LIST, list)
+    case Terminated(ref) =>
+      agents = agents.filter {
+        case (name, otherRef) => otherRef != ref
+      }
+      updateToAll(AGENTS_LIST, list)
+  }
+
+  def list = Some(Json.toJson(agents.keys.map { x => Json.obj("id" -> x)}.toArray))
+
+  override def preStart(): Unit = {
+    MessageRouterActor.path ! RegisterComponent("agents", self)
+    context.system.eventStream.subscribe(self, classOf[DisassociatedEvent])
+  }
+
+  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
+    case AGENTS_LIST => updateTo(subject, ref, list)
   }
 
 }

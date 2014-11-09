@@ -1,51 +1,65 @@
 package hq.agents
 
-import agent.shared.HandshakeResponse
-import akka.actor.{ActorRef, Actor, Props, ActorRefFactory}
+import agent.shared.{CommunicationProxyRef, GenericJSONMessage}
+import akka.actor._
+import akka.remote.DisassociatedEvent
 import common.actors.{ActorWithSubscribers, PipelineWithStatesActor}
-import hq.{RegisterComponent, Subject}
-import hq.gates.{GateAvailable, GateActor}
 import hq.routing.MessageRouterActor
-import play.api.libs.json.Json
+import hq.{RegisterComponent, Subject}
+import play.api.libs.json.{JsValue, Json}
 
 /**
  * Created by maks on 5/11/2014.
  */
 object AgentProxyActor {
-  def props(id: String, ref: ActorRef) = Props(new AgentProxyActor(id,ref))
+  def start(id: String, ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(id, ref), id)
 
-  def start(id: String, ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(id,ref), id)
+  def props(id: String, ref: ActorRef) = Props(new AgentProxyActor(id, ref))
 }
 
 class AgentProxyActor(id: String, ref: ActorRef) extends PipelineWithStatesActor with ActorWithSubscribers {
-
-  def route = "agent/" + id
-
+  val route = "agent/" + id
   val AGENT_X_INFO = Subject(route, "info")
+  private var info: Option[JsValue] = None
 
+  override def commonBehavior(): Actor.Receive = commonMessageHandler orElse super.commonBehavior()
 
+  private def commonMessageHandler: Receive = {
+    case GenericJSONMessage(jsonString) =>
+      Json.parse(jsonString).asOpt[JsValue] foreach process
+    case DisassociatedEvent(_, remoteAddr, _) =>
+      if (ref.path.address == remoteAddr) {
+        self ! PoisonPill
+      }
+  }
+
+  private def process(json: JsValue) = {
+    (json \ "info").asOpt[JsValue] foreach { infoVal =>
+      logger.info("!>>> Ok received " + infoVal)
+      info = Some(infoVal)
+      logger.info(s"!>>> $AGENT_X_INFO -> $info")
+
+      updateToAll(AGENT_X_INFO, info)
+    }
+  }
 
   override def preStart(): Unit = {
     super.preStart()
-    ref ! HandshakeResponse(self)
+    ref ! CommunicationProxyRef(self)
     MessageRouterActor.path ! RegisterComponent(route, self)
     context.parent ! AgentAvailable(route)
+    context.system.eventStream.subscribe(self, classOf[DisassociatedEvent])
   }
 
-  override def commonBehavior(): Actor.Receive = super.commonBehavior()
 
-  def updateToAll():Unit = updateToAll(AGENT_X_INFO, info)
-
-  def info = Some(Json.obj(
-    "name" -> id,
-    "text" -> s"some random text from $id",
-    "state" -> "active"
-  ))
+  override def postStop(): Unit = {
+    super.postStop()
+    context.system.eventStream.unsubscribe(self, classOf[DisassociatedEvent])
+  }
 
   override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
     case AGENT_X_INFO => updateTo(subject, ref, info)
   }
-
 
 
 }

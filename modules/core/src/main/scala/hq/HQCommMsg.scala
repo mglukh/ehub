@@ -13,6 +13,6 @@ case class Subscribe(subj: Subject) extends HQCommMsg
 case class Unsubscribe(subj: Subject) extends HQCommMsg
 case class Command(subj: Subject, data: Option[JsValue] = None) extends HQCommMsg
 case class Update(subj: Subject, data: JsValue, canBeCached: Boolean = true) extends HQCommMsg
-case class Discard(subj: Subject) extends HQCommMsg
+case class Stale(subj: Subject) extends HQCommMsg
 
 case class RegisterComponent(route: String, ref: ActorRef)

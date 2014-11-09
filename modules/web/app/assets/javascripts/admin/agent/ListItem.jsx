@@ -21,7 +21,7 @@ define([
             renderData: function () {
                 return (
                     <div>
-                    {this.state.info.name} : {this.state.info.text} :
+                    {this.state.info.name} {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
                         <StartStopButton state={this.state.info.state} route={this.props.id} />
                     </div>
                 );

@@ -16,6 +16,12 @@ define(['jquery'], function (jquery) {
     var sock;
 
 
+    var key2alias = {};
+    var alias2key = {};
+    var aliasCounter = 1;
+
+
+
     function attemptConnection() {
         attemptsSoFar++;
         currentState = WebSocket.CONNECTING;
@@ -31,7 +37,7 @@ define(['jquery'], function (jquery) {
         sock.onopen = function (x) {
             currentState = WebSocket.OPEN;
             clearTimeout(timeout);
-            console.debug("Websocket open at " + endpoint+" after " + attemptsSoFar +" attempts");
+            console.debug("Websocket open at " + endpoint + " after " + attemptsSoFar + " attempts");
             attemptsSoFar = 0;
             connection = sock;
 
@@ -43,6 +49,8 @@ define(['jquery'], function (jquery) {
         sock.onclose = function (x) {
             clearTimeout(timeout);
             sock = null;
+            alias2key = {};
+            key2alias = {};
 
             if (currentState == WebSocket.OPEN) {
                 listeners.forEach(function (next) {
@@ -53,7 +61,7 @@ define(['jquery'], function (jquery) {
             currentState = WebSocket.CLOSED;
 
             if (!forcedClose) {
-                setTimeout(function() {
+                setTimeout(function () {
                     attemptConnection();
                 }, reconnectInterval);
             }
@@ -62,37 +70,26 @@ define(['jquery'], function (jquery) {
         sock.onmessage = function (e) {
             console.debug("From Websocket: " + e.data);
 
-            var segments = e.data.split('|');
-            var type = segments[0];
-            var route = segments[1];
-            var topic = segments[2];
-            var payload = segments[3] ? JSON.parse(segments[3]) : false;
+            var type = e.data.substring(0,1);
+
+            var aliasAndData = e.data.substring(1).split('|');
+
+            var path = alias2key[aliasAndData[0]];
+            var payload = aliasAndData[1] ? JSON.parse(aliasAndData[1]) : false;
+
+            console.debug("Alias conversion: " + aliasAndData[0] + " -> " + path);
+
+            var segments = path.split('|');
+            var route = segments[0];
+            var topic = segments[1];
 
             console.debug("From Websocket: " + type + " : " + route + " : " + topic + " : " + payload);
 
-            var eventId = type+"|"+route+"|"+topic;
+            var eventId = route + "|" + topic;
 
             listeners.forEach(function (next) {
-                next.onMessage(eventId, payload);
+                next.onMessage(eventId, type, payload);
             });
-
-
-            //if (type == 'U') {
-            //    listeners.forEach(function (next) {
-            //        if (next.interestedIn(route, topic)) {
-            //            console.log("!>>> U -> " + route + "|" + topic);
-            //            next.ref.onMessage(payload);
-            //        }
-            //    });
-            //} else if (type == 'D') {
-            //    listeners.forEach(function (next) {
-            //        if (next.interestedIn(route, topic)) {
-            //            console.log("!>>> D -> " + route + "|" + topic);
-            //            next.ref.onDiscard(payload);
-            //            next.removeInterest(route, topic);
-            //        }
-            //    });
-            //}
 
         };
 
@@ -105,7 +102,20 @@ define(['jquery'], function (jquery) {
 
     function sendToServer(type, route, topic, payload) {
         if (connected()) {
-            sock.send(type + "|" + route + "|" + topic + "|" + (payload ? JSON.stringify(payload) : ""));
+            var key = route + "|" + topic;
+            if (!key2alias[key]) {
+                aliasCounter++;
+
+                var alias = aliasCounter.toString(32);
+
+                key2alias[key] = aliasCounter;
+                alias2key[alias] = key;
+                sock.send('A' + alias + "|" + key);
+                key = alias;
+            } else {
+                key = key2alias[key];
+            }
+            sock.send(type + key + "|" + (payload ? JSON.stringify(payload) : ""));
             return true;
         } else {
             return false;
@@ -121,8 +131,8 @@ define(['jquery'], function (jquery) {
 
             var handle = {
                 //uid: Math.random().toString(36).substr(2, 10),
-                onMessage: function (eventId, payload) {
-                    if (messageHandlers[eventId]) messageHandlers[eventId](payload);
+                onMessage: function (eventId, type, payload) {
+                    if (messageHandlers[eventId]) messageHandlers[eventId](type, payload);
                 },
                 stop: stopFunc,
                 subscribe: subscribeFunc,
@@ -131,10 +141,10 @@ define(['jquery'], function (jquery) {
                     return sendToServer("C", route, topic, data);
                 },
                 connected: connected,
-                addWsOpenEventListener: function(callback) {
+                addWsOpenEventListener: function (callback) {
                     this.onOpen = callback;
                 },
-                addWsClosedEventListener: function(callback) {
+                addWsClosedEventListener: function (callback) {
                     this.onClosed = callback;
                 }
             };
@@ -148,14 +158,14 @@ define(['jquery'], function (jquery) {
             function subscribeFunc(route, topic, callback) {
                 if (sendToServer("S", route, topic, false)) {
                     console.log("Registered interest: {" + route + "}" + topic);
-                    messageHandlers["U|"+route+"|"+topic] = callback;
+                    messageHandlers[route + "|" + topic] = callback;
                 }
             }
 
             function unsubscribeFunc(route, topic, callback) {
                 if (sendToServer("U", route, topic, false)) {
                     console.log("Unregistered interest: {" + route + "}" + topic);
-                    messageHandlers["U|"+route+"|"+topic] = null;
+                    messageHandlers[route + "|" + topic] = null;
                 }
             }
 

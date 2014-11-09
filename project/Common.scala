@@ -42,6 +42,7 @@ object Common {
     "org.codehaus.groovy" % "groovy-all" % "2.3.6",
     "com.typesafe.akka" %% "akka-actor" % "2.3.6",
     "com.typesafe.akka" %% "akka-remote" % "2.3.6",
+    "com.typesafe.akka" %% "akka-cluster" % "2.3.6",
     "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.6",
     "com.typesafe.akka" %% "akka-stream-experimental" % "0.7",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",

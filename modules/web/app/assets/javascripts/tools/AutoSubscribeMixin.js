@@ -6,6 +6,27 @@ define(['wsclient'], function (client) {
             partialStateUpdate[key] = data;
             this.setState(partialStateUpdate);
         },
+        onStaleUpdate: function (key, data) {
+            var staleKey = key+"_stale";
+            if (this.state[staleKey] != data) {
+                var partialStateUpdate = {};
+                partialStateUpdate[staleKey] = data;
+                this.setState(partialStateUpdate);
+            }
+        },
+
+        updateHandler: function (type, data) {
+            var id = this.subscriptionConfig();
+            console.debug("onMessage() type " + type + " for " + id.route + "{" + id.topic + "}");
+            var staleKey = id.target+"_stale";
+            if (type == "D") {
+                this.onStaleUpdate(id.target, true);
+            } else {
+                this.onDataUpdate(id.target, data);
+                this.onStaleUpdate(id.target, false);
+            }
+        },
+
         startSubscription: function () {
             var self = this;
             var id = this.subscriptionConfig();
@@ -16,14 +37,9 @@ define(['wsclient'], function (client) {
                 return id.route + "{" + id.topic + "}";
             }
 
-            function updateHandler(data) {
-                console.debug("onMessage() for " + id);
-                self.onDataUpdate(id.target, data);
-            }
-
             function subscribe() {
                 if (id) {
-                    self.handle.subscribe(id.route, id.topic, updateHandler);
+                    self.handle.subscribe(id.route, id.topic, self.updateHandler);
                 } else {
                     console.warn("subscriptionId is undefined or returns empty string");
                 }
@@ -46,13 +62,20 @@ define(['wsclient'], function (client) {
             this.sendCommand = this.handle.command;
 
             if (this.handle.connected) {
+                wsOpenHandler();
                 subscribe();
+            } else {
+                wsClosedHandler();
             }
 
             console.debug("Initiated subscription for " + id);
         },
         stopSubscription: function () {
             if (this.handle) {
+                var id = this.subscriptionConfig();
+
+                this.handle.unsubscribe(id.route, id.topic, this.updateHandler);
+
                 this.handle.stop();
                 this.handle = null;
             }

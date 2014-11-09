@@ -1,15 +1,14 @@
 package agent.controller
 
+import agent.controller.flow.{FlowActor, FlowConfigUpdate, StartFlowInstance, SuspendFlowInstance}
 import agent.controller.storage._
-import agent.shared.{StopFlow, StartFlow, CreateFlow, Handshake}
+import agent.shared._
 import akka.actor.{ActorRef, Props}
 import akka.stream.scaladsl2.FlowMaterializer
 import com.typesafe.config.Config
-import agent.controller.flow.{FlowActor, FlowConfigUpdate, StartFlowInstance, SuspendFlowInstance}
-import common.actors.{ReconnectingActor, ActorWithComposableBehavior}
-import common.actors.ReconnectingActor
-import play.api.libs.json.{JsValue, Json}
+import common.actors.{ActorWithComposableBehavior, ReconnectingActor}
 import net.ceedubs.ficus.Ficus._
+import play.api.libs.json.{JsValue, Json}
 
 import scala.collection.mutable
 
@@ -24,13 +23,43 @@ class AgentControllerActor(implicit config: Config)
   extends ActorWithComposableBehavior
   with ReconnectingActor {
 
-
   implicit val mat = FlowMaterializer()
   implicit val system = context.system
+  val flowActors: mutable.Map[Long, ActorRef] = mutable.HashMap()
+  var storage: ActorRef = context.actorOf(ConfigStorageActor.props, "storage")
+  var commProxy: Option[ActorRef] = None
 
-  var storage : ActorRef = context.actorOf(ConfigStorageActor.props, "storage")
+  override def commonBehavior(): Receive = commonMessageHandler orElse super.commonBehavior()
 
-  val flowActors : mutable.Map[Long, ActorRef] = mutable.HashMap()
+  private def commonMessageHandler: Receive = handleReconnectMessages orElse {
+    case ConnectedState() =>
+      remoteActorRef.foreach(_ ! Handshake(config.as[String]("agent.name")))
+    case DisconnectedState() =>
+      commProxy = None
+      initiateReconnect()
+    case CommunicationProxyRef(ref) =>
+      commProxy = Some(ref)
+      sendToHQ(info)
+      sendToHQ(snapshot)
+  }
+
+  private def sendToHQ(json: JsValue) = {
+    commProxy foreach { actor =>
+      logger.debug(s"$json -> $actor")
+      actor ! GenericJSONMessage(json.toString())
+    }
+  }
+
+  private def snapshot = Json.obj()
+
+  private def info = Json.obj(
+    "info" -> Json.obj(
+      "name" -> config.as[String]("agent.name"),
+      "text" -> ("some random text from " + config.as[String]("agent.name")),
+      "state" -> "active"
+    )
+  )
+
 
   override def connectionEndpoint: String = config.as[String]("agent.hq.endpoint")
 
@@ -38,25 +67,7 @@ class AgentControllerActor(implicit config: Config)
     initiateReconnect()
     storage ! RetrieveConfigForAll()
     super.preStart()
-    switchToCustomBehavior(handleConnectivityMessages orElse handleInitialisationMessages, Some("awaiting initialisation"))
-  }
-
-  def createActor(flowId: Long, config: String, maybeState: Option[String]): Unit = {
-    flowActors.get(flowId).foreach { actor =>
-      logger.info(s"Stopping $actor")
-      context.stop(actor)
-    }
-    logger.info(s"Creating a new actor for flow $flowId")
-    flowActors += (flowId -> context.actorOf(FlowActor.props(flowId, Json.parse(config), maybeState.map(Json.parse)), "flow"+flowId))
-  }
-
-
-
-  private def handleConnectivityMessages: Receive = handleReconnectMessages orElse {
-    case ConnectedState() =>
-      remoteActorRef.foreach(_ ! Handshake(config.as[String]("agent.name")))
-    case DisconnectedState() =>
-      initiateReconnect()
+    switchToCustomBehavior(handleInitialisationMessages, Some("awaiting initialisation"))
   }
 
   private def handleInitialisationMessages: Receive = {
@@ -68,17 +79,16 @@ class AgentControllerActor(implicit config: Config)
         case StoredConfig(id, None) =>
           logger.warn(s"No config defined for flow ID $id")
       }
-      switchToCustomBehavior(handleConnectivityMessages orElse handleInitialisationMessages orElse handleFlowOpMessages, Some("with flows inititalised"))
+      switchToCustomBehavior(handleFlowOpMessages, Some("with flows inititalised"))
   }
 
-
-
   private def handleFlowOpMessages: Receive = {
+
     case CreateFlow(cfg) =>
       val flowId = (cfg \ "flowId").as[Long]
-      val cfgAsStr : String = Json.stringify(cfg)
+      val cfgAsStr: String = Json.stringify(cfg)
       logger.info("Creating flow " + flowId)
-      storage ! StoreConfig(FlowConfig(flowId, cfgAsStr , None))
+      storage ! StoreConfig(FlowConfig(flowId, cfgAsStr, None))
       createActor(flowId, cfgAsStr, None)
     case StartFlow(id) =>
       logger.info("Starting flow " + id)
@@ -91,6 +101,15 @@ class AgentControllerActor(implicit config: Config)
       storage ! StoreState(FlowState(id, Some(Json.stringify(state))))
   }
 
-  private case class CreateFlowWith(flowId: Long, config: JsValue, state: Option[JsValue])
+  def createActor(flowId: Long, config: String, maybeState: Option[String]): Unit = {
+    flowActors.get(flowId).foreach { actor =>
+      logger.info(s"Stopping $actor")
+      context.stop(actor)
+    }
+    logger.info(s"Creating a new actor for flow $flowId")
+    flowActors += (flowId -> context.actorOf(FlowActor.props(flowId, Json.parse(config), maybeState.map(Json.parse)), "flow" + flowId))
+  }
+
+  //  private case class CreateFlowWith(flowId: Long, config: JsValue, state: Option[JsValue])
 
 }
