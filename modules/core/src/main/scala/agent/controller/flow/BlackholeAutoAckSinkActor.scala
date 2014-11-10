@@ -45,7 +45,7 @@ class BlackholeAutoAckSinkActor
   }
 
 
-  override def commonBehavior(): Actor.Receive = super.commonBehavior() orElse {
+  override def commonBehavior: Actor.Receive = super.commonBehavior orElse {
     case OnNext(msg) => context.parent ! Acknowledged[Any](-1, msg)
   }
 

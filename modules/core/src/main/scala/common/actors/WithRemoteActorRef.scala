@@ -20,6 +20,6 @@ import akka.actor.ActorRef
 
 trait WithRemoteActorRef {
 
-  def remoteActorRef : Option[ActorRef]
+  def remoteActorRef: Option[ActorRef]
 
 }

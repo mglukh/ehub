@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
 define(['react', 'admin/agent/datatap/List'],
     function (React, List) {
 
@@ -27,7 +27,7 @@ define(['react', 'admin/agent/datatap/List'],
         render: function () {
             return (
                 <div>
-                    <List/>
+                    <List addr={this.props.addr} id={this.props.id}/>
                 </div>
             )
         }

@@ -16,13 +16,13 @@
 
 package agent.controller
 
-import agent.controller.flow.{TapActor, TapConfigUpdate, StartFlowInstance, SuspendFlowInstance}
+import agent.controller.flow.{TapActor, TapConfigUpdate}
 import agent.controller.storage._
 import agent.shared._
 import akka.actor.{ActorRef, Props}
 import akka.stream.scaladsl2.FlowMaterializer
 import com.typesafe.config.Config
-import common.actors.{ActorObjWithConfig, ActorObj, ActorWithComposableBehavior, ReconnectingActor}
+import common.actors.{ActorObjWithConfig, ActorWithComposableBehavior, ReconnectingActor}
 import net.ceedubs.ficus.Ficus._
 import play.api.libs.json.{JsValue, Json}
 
@@ -47,7 +47,7 @@ class AgentControllerActor(implicit config: Config)
   var storage = ConfigStorageActor.path
   var commProxy: Option[ActorRef] = None
 
-  override def commonBehavior(): Receive = commonMessageHandler orElse super.commonBehavior()
+  override def commonBehavior: Receive = commonMessageHandler orElse super.commonBehavior
 
   private def commonMessageHandler: Receive = handleReconnectMessages orElse {
     case ConnectedState() =>
@@ -60,7 +60,11 @@ class AgentControllerActor(implicit config: Config)
       sendToHQAll()
   }
 
-  private def nextAvailableId = tapActors.keys.max + 1
+  private def nextAvailableId : Long = {
+    if (tapActors.keys.isEmpty) {
+      0
+    } else tapActors.keys.max + 1
+  }
 
   private def sendToHQAll() = {
     sendToHQ(info)
@@ -78,7 +82,7 @@ class AgentControllerActor(implicit config: Config)
     "taps" -> Json.toJson(
       tapActors.keys.toArray.sorted.map { key => Json.obj(
         "id" -> actorFriendlyId(key.toString),
-        "ref" -> tapActors.get(key).get.path.toString
+        "ref" -> ("controller/" + actorFriendlyId(key.toString))
       )}
     )
   )
@@ -112,14 +116,19 @@ class AgentControllerActor(implicit config: Config)
         case StoredConfig(id, None) =>
           logger.warn(s"No config defined for tap ID $id")
       }
+      sendToHQAll()
       switchToCustomBehavior(handleTapOpMessages, Some("existing taps loaded"))
   }
 
   private def handleTapOpMessages: Receive = {
 
     case CreateTap(cfg) =>
-      val tapId = (cfg \ "tapId").asOpt[Long] getOrElse nextAvailableId
-      val cfgAsStr: String = Json.stringify(cfg)
+      logger.info("Creating tap with config " + cfg)
+
+      val c = (cfg \ "config").as[JsValue]
+
+      val tapId = (c \ "tapId").asOpt[Long] getOrElse nextAvailableId
+      val cfgAsStr: String = Json.stringify(c)
       logger.info("Creating tap " + tapId)
       storage ! StoreConfig(TapConfig(tapId, cfgAsStr, None))
       createActor(tapId, cfgAsStr, None)

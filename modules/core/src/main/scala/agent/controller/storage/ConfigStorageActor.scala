@@ -28,19 +28,19 @@ object ConfigStorageActor extends ActorObjWithConfig {
   override def props(implicit config: Config) = Props(new ConfigStorageActor())
 }
 
-case class TapConfig(flowId: Long, config: String, state: Option[String])
+case class TapConfig(tapId: Long, config: String, state: Option[String])
 
-case class TapState(flowId: Long, state: Option[String])
+case class TapState(tapId: Long, state: Option[String])
 
 case class StoreConfig(config: TapConfig)
 
 case class StoreState(config: TapState)
 
-case class RetrieveConfigFor(flowId: Long)
+case class RetrieveConfigFor(tapId: Long)
 
 case class RetrieveConfigForAll()
 
-case class StoredConfig(flowId: Long, config: Option[TapConfig])
+case class StoredConfig(tapId: Long, config: Option[TapConfig])
 
 case class StoredConfigs(configs: List[StoredConfig])
 
@@ -54,14 +54,14 @@ class ConfigStorageActor(implicit config: Config) extends ActorWithComposableBeh
   }
 
   override def commonBehavior(): Actor.Receive = super.commonBehavior orElse {
-    case StoreConfig(TapConfig(flowId, c, s)) =>
-      logger.debug(s"Persisted config and state for flow $flowId")
-      storage.store(flowId, c, s)
-    case StoreState(TapState(flowId, s)) =>
-      logger.debug(s"Persisted state for flow $flowId")
-      storage.storeState(flowId, s)
-    case RetrieveConfigFor(flowId) =>
-      sender() ! StoredConfig(flowId, storage.retrieve(flowId) map { case (c, s) => TapConfig(flowId, c, s)})
+    case StoreConfig(TapConfig(tapId, c, s)) =>
+      logger.debug(s"Persisted config and state for flow $tapId")
+      storage.store(tapId, c, s)
+    case StoreState(TapState(tapId, s)) =>
+      logger.debug(s"Persisted state for flow $tapId")
+      storage.storeState(tapId, s)
+    case RetrieveConfigFor(tapId) =>
+      sender() ! StoredConfig(tapId, storage.retrieve(tapId) map { case (c, s) => TapConfig(tapId, c, s)})
     case RetrieveConfigForAll() =>
       sender() ! StoredConfigs(storage.retrieveAll().map {
         case (fId, c, s) => StoredConfig(fId, Some(TapConfig(fId, c, s)))

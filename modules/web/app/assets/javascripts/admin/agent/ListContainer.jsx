@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,10 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
-define(['react', 'admin/agent/List', 'admin/agent/datatap/ListContainer'],
-    function (React, List, TapListContainer) {
+define(['react', 'admin/agent/List', 'admin/agent/datatap/ListContainer', 'admin/agent/datatap/AddNewForm'],
+    function (React, List, TapListContainer, AddNew) {
 
     return React.createClass({
 
@@ -31,7 +31,9 @@ define(['react', 'admin/agent/List', 'admin/agent/datatap/ListContainer'],
         render: function () {
 
             var selection = this.state.selection
-                ? <div><h3>Selected:</h3><TapListContainer id={this.state.selection} /></div>
+                ? <div><h3>Selected:</h3><TapListContainer addr={this.props.addr} id={this.state.selection} />
+                    <div><AddNew addr={this.props.addr} id={this.state.selection} /></div>
+                    </div>
                 : <div>Please select agent</div>
 
             return (

@@ -32,7 +32,7 @@ trait ResourceCatalog {
   def close(): Unit
 }
 
-class H2ResourceCatalog(flowId: Long, dir: File, fileName: String = ".idx") extends InMemoryResourceCatalog {
+class H2ResourceCatalog(tapId: Long, dir: File, fileName: String = ".idx") extends InMemoryResourceCatalog {
   import scala.slick.driver.H2Driver.simple._
 
   private def dbURL(file: File): String = "jdbc:h2:" + file.getAbsolutePath + "/" + fileName
@@ -53,9 +53,9 @@ class H2ResourceCatalog(flowId: Long, dir: File, fileName: String = ".idx") exte
 
 
   class FileIndex(tag: Tag) extends Table[(Long, Long, Long, String, String, Long, Long)](tag, "findex") {
-    def * = (flowId, seed, resourceId, dir, name, createdTimestamp, sizeNow)
+    def * = (tapId, seed, resourceId, dir, name, createdTimestamp, sizeNow)
 
-    def flowId = column[Long]("tapId")
+    def tapId = column[Long]("tapId")
     def seed = column[Long]("seed")
     def resourceId = column[Long]("resourceId")
 
@@ -74,7 +74,7 @@ class H2ResourceCatalog(flowId: Long, dir: File, fileName: String = ".idx") exte
     val list = db withSession {
       implicit session =>
         (for {
-          entity <- findexes if entity.flowId === flowId
+          entity <- findexes if entity.tapId === tapId
         } yield entity).list
     }
     super.update(list.map {
@@ -90,10 +90,10 @@ class H2ResourceCatalog(flowId: Long, dir: File, fileName: String = ".idx") exte
     db withSession {
       implicit session =>
         (for {
-          entity <- findexes if entity.flowId === flowId
+          entity <- findexes if entity.tapId === tapId
         } yield entity).delete
         entities.foreach { entity =>
-          findexes += (flowId, entity.idx.seed, entity.idx.resourceId, entity.id.dir, entity.id.name, entity.id.createdTimestamp, entity.id.sizeNow)
+          findexes += (tapId, entity.idx.seed, entity.idx.resourceId, entity.id.dir, entity.id.name, entity.id.createdTimestamp, entity.id.sizeNow)
         }
         logger.debug(s"Persisted $entities")
     }

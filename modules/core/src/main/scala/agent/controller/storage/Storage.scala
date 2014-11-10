@@ -29,9 +29,9 @@ import scala.slick.jdbc.meta.MTable
  */
 trait Storage {
 
-  def store(flowId: Long, config: String, state: Option[String]) : Unit
-  def storeState(flowId: Long, state: Option[String]) : Unit
-  def retrieve(flowId: Long) : Option[(String, Option[String])]
+  def store(tapId: Long, config: String, state: Option[String]) : Unit
+  def storeState(tapId: Long, state: Option[String]) : Unit
+  def retrieve(tapId: Long) : Option[(String, Option[String])]
   def retrieveAll() : List[(Long, String, Option[String])]
 
 }
@@ -75,9 +75,9 @@ case class H2Storage(implicit config: Config) extends Storage with StrictLogging
   }
 
   class Configurations(tag: Tag) extends Table[(Long, String, Option[String])](tag, "configurations") {
-    def * = (flowId, conf, state)
+    def * = (tapId, conf, state)
 
-    def flowId = column[Long]("tapId", O.PrimaryKey)
+    def tapId = column[Long]("tapId", O.PrimaryKey)
 
     def conf = column[String]("conf")
 
@@ -86,24 +86,24 @@ case class H2Storage(implicit config: Config) extends Storage with StrictLogging
 
   private def configurations = TableQuery[Configurations]
 
-  override def store(flowId: Long, config: String, state: Option[String]): Unit = {
+  override def store(tapId: Long, config: String, state: Option[String]): Unit = {
     db withSession { implicit session =>
-      configurations.insertOrUpdate((flowId, config, state))
+      configurations.insertOrUpdate((tapId, config, state))
     }
   }
 
-  override def retrieve(flowId: Long): Option[(String, Option[String])] = {
+  override def retrieve(tapId: Long): Option[(String, Option[String])] = {
     db withSession { implicit session =>
-      (configurations filter (_.flowId === flowId)).firstOption
+      (configurations filter (_.tapId === tapId)).firstOption
     } map {
       case (f, c, s) => (c,s)
     }
   }
 
-  override def storeState(flowId: Long, state: Option[String]): Unit = {
+  override def storeState(tapId: Long, state: Option[String]): Unit = {
     db withSession { implicit session =>
       configurations
-        .filter(_.flowId === flowId)
+        .filter(_.tapId === tapId)
         .map(p => p.state)
         .update(state)
     }

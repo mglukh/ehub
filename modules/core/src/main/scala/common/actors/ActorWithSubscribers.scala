@@ -23,84 +23,74 @@ import play.api.libs.json.JsValue
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
-trait ActorWithSubscribers extends ActorWithComposableBehavior {
+trait ActorWithSubscribers[T] extends ActorWithComposableBehavior {
 
-  private val subscribers : mutable.Map[Subject, Set[ActorRef]] = new mutable.HashMap[Subject, Set[ActorRef]]()
+  private val subscribers: mutable.Map[T, Set[ActorRef]] = new mutable.HashMap[T, Set[ActorRef]]()
 
-  private var watchedSubscribers : mutable.Set[ActorRef] = mutable.HashSet()
+  override def commonBehavior: Actor.Receive = handleMessages orElse super.commonBehavior
 
-  override def commonBehavior(): Actor.Receive = handleMessages orElse super.commonBehavior()
+  def processCommand(ref: ActorRef, subject: T, maybeData: Option[JsValue]) = {}
 
-  def firstSubscriber(subject: Subject) = {}
-  def lastSubscriberGone(subject: Subject) = {}
-  def processSubscribeRequest(ref: ActorRef, subject: Subject) = {}
-  def processUnsubscribeRequest(ref: ActorRef, subject: Subject) = {}
-  def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = {}
+  def processSubscribeRequest(ref: ActorRef, subject: T) = {}
 
-  def collectSubjects(f: Subject => Boolean) = subscribers.collect {
-    case (sub, set) if f(sub) => sub
+  def processUnsubscribeRequest(ref: ActorRef, subject: T) = {}
+
+  def firstSubscriber(subject: T) = {}
+
+  def lastSubscriberGone(subject: T) = {}
+
+  def collectSubjects(f: T => Boolean) = subscribers.collect { case (sub, set) if f(sub) => sub}
+
+  def collectSubscribers(f: T => Boolean) = subscribers.filter { case (sub, set) => f(sub)}
+
+  def subscribersFor(subj: T) = subscribers.get(subj)
+
+  def updateToAll(subj: T, data: Option[JsValue]) = subscribersFor(subj).foreach(_.foreach(updateTo(subj, _, data)))
+
+  def updateTo(subj: T, ref: ActorRef, data: Option[JsValue]) = {
+    logger.debug(s"Update for $subj -> $ref")
+    data foreach (ref ! Update(self, subj, _, canBeCached = true))
   }
-  def collectSubscribers(f: Subject => Boolean) = subscribers.filter {
-    case (sub, set) => f(sub)
-  }
-  def subscribersFor(subj: Subject) = subscribers.get(subj)
-  def updateTo(subj: Subject, ref: ActorRef, data: Option[JsValue]) =
-    data foreach(ref ! Update(subj, _, canBeCached = true))
-  def updateToAll(subj: Subject, data: Option[JsValue]) =
-    subscribersFor(subj).foreach { set =>
-      set.foreach { ref =>
-        logger.debug(s"update on $subj -> $ref")
-        updateTo(subj, ref, data)
-      }
-    }
 
-  def addSubscriber(ref: ActorRef, subject: Subject): Unit = {
+  def convertSubject(subj: Any) : Option[T]
+
+  private def isOneOfTheSubscribers(ref: ActorRef) = subscribers.values.exists(_.contains(ref))
+
+  private def handleMessages: Receive = {
+    case Subscribe(sourceRef, subj) => convertSubject(subj) foreach(addSubscriber(sourceRef, _))
+    case Unsubscribe(sourceRef, subj) => convertSubject(subj) foreach(removeSubscriber(sourceRef, _))
+    case Command(sourceRef, subj, data) => convertSubject(subj) foreach(processCommand(sourceRef, _, data))
+    case Terminated(ref) if isOneOfTheSubscribers(ref) => removeSubscriber(ref)
+  }
+
+  private def addSubscriber(ref: ActorRef, subject: T): Unit = {
     logger.info(s"New subscriber for $subject at $ref")
-
-    if (!watchedSubscribers.contains(ref)) {
-      watchedSubscribers += ref
-      context.watch(ref)
-    }
-
+    context.watch(ref)
     subscribers.get(subject) match {
       case None =>
         logger.info(s"First subscriber for $subject: $ref")
         firstSubscriber(subject)
-      case Some(x) =>
-        logger.info(s"New subscriber for existing subscription for $subject")
+      case _ =>
     }
-
     subscribers += (subject -> (subscribers.getOrElse(subject, new HashSet[ActorRef]()) + ref))
     processSubscribeRequest(ref, subject)
   }
 
-  def removeSubscriber(ref: ActorRef, subject: Subject): Unit = {
+  private def removeSubscriber(ref: ActorRef): Unit = {
+    context.unwatch(ref)
+    subscribers.collect {
+      case (subj, set) if set contains ref => subj
+    } foreach (removeSubscriber(ref, _))
+  }
+
+  private def removeSubscriber(ref: ActorRef, subject: T): Unit = {
     val refs: Set[ActorRef] = subscribers.getOrElse(subject, new HashSet[ActorRef]()) - ref
     if (refs.isEmpty) {
       subscribers -= subject
-      lastSubscriberGone(subject)
       logger.info(s"No more subscribers for $subject: $ref")
+      lastSubscriberGone(subject)
     } else subscribers += (subject -> refs)
     processUnsubscribeRequest(ref, subject)
-  }
-
-  private def removeSubscriber(ref: ActorRef): Unit = {
-    context.unwatch(ref)
-    watchedSubscribers -= ref
-    subscribers.collect {
-      case (subj, set) if set contains ref => subj
-    } foreach(removeSubscriber(ref, _))
-  }
-
-  private def handleMessages : Receive = {
-    case Subscribe(subj) =>
-      addSubscriber(sender(), subj)
-    case Unsubscribe(subj) =>
-      removeSubscriber(sender(), subj)
-    case Command(subj, data) =>
-      processCommand(sender(), subj, data)
-    case Terminated(ref) if watchedSubscribers contains ref =>
-      removeSubscriber(ref)
   }
 
 

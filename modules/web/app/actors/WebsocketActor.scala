@@ -17,7 +17,7 @@
 package actors
 
 import akka.actor.{Actor, ActorRef, Props}
-import common.actors.{ActorWithClusterAwareness, ActorWithComposableBehavior}
+import common.actors.ActorWithComposableBehavior
 import hq._
 import hq.routing.MessageRouterActor
 import play.api.libs.json.{JsValue, Json}
@@ -40,36 +40,41 @@ class WebsocketActor(out: ActorRef)
     logger.info(s"Accepted WebSocket connection, proxy actor: $out")
   }
 
-  override def commonBehavior(): Actor.Receive = clientMessages orElse serverMessages orElse super.commonBehavior()
+  override def commonBehavior: Actor.Receive = messageHandler orElse super.commonBehavior
 
-  def serverMessages: Actor.Receive = {
-    case Update(Subject(address, subj, topic), data, _) =>
-      path2alias.get(address + "|" + subj + "|" + topic) foreach { alias =>
-        val value: String = "U" + alias + "|" + data.toString()
-        out ! value
-      }
+  private def messageHandler: Actor.Receive = {
+    case Update(sourceRef, subj, data, _) =>
+      path2alias get subj2path(subj) foreach (out ! buildClientMessage("U", _)(Json.stringify(data)))
+    case Stale(sourceRef, subj) =>
+      path2alias get subj2path(subj) foreach (out ! buildClientMessage("D", _)())
 
-    case Stale(Subject(address, subj, topic)) =>
-      path2alias.get(address + "|" + subj + "|" + topic) foreach { alias =>
-        val value: String = "D" + alias + "|"
-        out ! value
+    case payload: String =>
+      logger.debug(s"Received from Websocket: $payload")
+
+      val mtype = payload.head
+      val data = payload.tail
+
+      mtype match {
+        case 'A' => addOrReplaceAlias(data)
+        case _ => extractByAlias(data) foreach { str =>
+          extractSubjectAndPayload(str,
+            processRequestByType(mtype, _, _) foreach(MessageRouterActor.path ! _)
+          )}
       }
   }
 
-  def clientMessages: Actor.Receive = {
-    case x: String =>
-      logger.info(s"->Websocket: $x")
+  private def buildClientMessage(mt: String, alias: String)(payload: String = "") = mt + alias + "|" + payload
 
-      x.head match {
-        case 'A' =>
-          alias(x.tail)
-        case mt =>
-          extractByAlias(x.tail) foreach (processClientRequest(mt, _))
-      }
 
+  private def subj2path(subj: Any) = subj match {
+    case RemoteSubj(addr, LocalSubj(ComponentKey(compKey), TopicKey(topicKey))) => segments2path(addr, compKey, topicKey)
+    case LocalSubj(ComponentKey(compKey), TopicKey(topicKey)) => segments2path("_", compKey, topicKey)
+    case _ => "invalid"
   }
 
-  def alias(value: String) = {
+  private def segments2path(addr: String, component: String, topic: String) = addr + "|" + component + "|" + topic
+
+  private def addOrReplaceAlias(value: String) = {
 
     val idx: Int = value.indexOf('|')
 
@@ -81,38 +86,34 @@ class WebsocketActor(out: ActorRef)
     path2alias += path -> al
   }
 
-  def processClientRequest(msgType: Char, x: String) = {
-    x.split('|') match {
-      case Array(address, route, topic) =>
-        val subj = Subject(address, route, topic)
-        val msg = msgType match {
-          case 'S' => Some(Subscribe(subj))
-          case 'U' => Some(Unsubscribe(subj))
-          case _ =>
-            logger.warn(s"Invalid message type: " + msgType)
-            None
-        }
-        msg foreach (MessageRouterActor.path ! _)
-      case Array(address, route, topic, payload) =>
-        val subj = Subject(address, route, topic)
-        val msg = msgType match {
-          case 'C' => Some(Command(subj, Json.parse(payload).asOpt[JsValue]))
-          case _ =>
-            logger.warn("Invalid message type: " + msgType)
-            None
-        }
-        msg foreach (MessageRouterActor.path ! _)
-      case m => logger.warn("Invalid message format" + m)
-    }
-
+  private def processRequestByType(msgType: Char, subj: Subj, payload: Option[JsValue]) = msgType match {
+    case 'S' => Some(Subscribe(self, subj))
+    case 'U' => Some(Unsubscribe(self, subj))
+    case 'C' => Some(Command(self, subj, payload))
+    case _ =>
+      logger.warn(s"Invalid message type: " + msgType)
+      None
   }
 
-  def extractByAlias(value: String): Option[String] = {
+  private def extractByAlias(value: String): Option[String] = {
     val idx: Int = value.indexOf('|')
     val al = value.substring(0, idx)
     val path = value.substring(idx)
 
     alias2path.get(al).map(_ + path)
+  }
+
+  private def extractSubjectAndPayload(str: String, f: (Subj, Option[JsValue]) => Unit) = {
+    def extractPayload(list: List[String]) = list match {
+      case Nil => None
+      case x :: xs => Json.parse(x).asOpt[JsValue]
+    }
+    def extract(list: List[String]) = list match {
+      case "_" :: comp :: topic :: tail => f(LocalSubj(ComponentKey(comp), TopicKey(topic)), extractPayload(tail))
+      case addr :: comp :: topic :: tail => f(RemoteSubj(addr, LocalSubj(ComponentKey(comp), TopicKey(topic))), extractPayload(tail))
+      case _ => logger.warn(s"Invalid payload $str")
+    }
+    extract(str.split('|').toList)
   }
 
 }

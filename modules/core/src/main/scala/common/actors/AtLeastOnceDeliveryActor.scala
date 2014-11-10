@@ -31,9 +31,28 @@ trait AtLeastOnceDeliveryActor[T] extends ActorWithTicks with WithRemoteActorRef
   private var counter = now
 
   def inFlightCount = list.size
+
   def configUnacknowledgedMessagesResendInterval = 5.seconds
 
-  private def correlationId(m:T) : Long = {
+  def deliverMessage(msg: T) = {
+    list = list :+ send(InFlight(0, msg, correlationId(msg)))
+  }
+
+  def acknowledgeUpTo(correlationId: Long) = {
+    logger.debug(s"Ack: $correlationId")
+    list.find(_.correlationId == correlationId).foreach(v => self ! Acknowledged[T](correlationId, v.msg))
+    list = list.dropWhile(_.correlationId <= correlationId)
+  }
+
+  override def processTick() = {
+    resendAllPending()
+  }
+
+  def handleRedeliveryMessages: Receive = {
+    case Acknowledge(x) => acknowledgeUpTo(x)
+  }
+
+  private def correlationId(m: T): Long = {
     counter = counter + 1
     counter
   }
@@ -47,14 +66,14 @@ trait AtLeastOnceDeliveryActor[T] extends ActorWithTicks with WithRemoteActorRef
     }
   }
 
-  private def resend(m: InFlight) : InFlight = {
+  private def resend(m: InFlight): InFlight = {
     if (now - m.sentTime > configUnacknowledgedMessagesResendInterval.toMillis) {
       logger.debug(s"Resending ${m.correlationId}")
       send(m)
     } else m
   }
 
-  private def send(m: InFlight) : InFlight = {
+  private def send(m: InFlight): InFlight = {
     val sentTime = remoteActorRef match {
       case None => m.sentTime
       case Some(ref) =>
@@ -62,24 +81,6 @@ trait AtLeastOnceDeliveryActor[T] extends ActorWithTicks with WithRemoteActorRef
         now
     }
     InFlight(sentTime, m.msg, m.correlationId)
-  }
-
-  def deliverMessage(msg: T) = {
-    list = list :+ send(InFlight(0, msg, correlationId(msg)))
-  }
-
-  def acknowledgeUpTo(correlationId: Long) = {
-    logger.debug(s"Ack: $correlationId")
-    list.find(_.correlationId == correlationId).foreach( v => self ! Acknowledged[T](correlationId, v.msg) )
-    list = list.dropWhile(_.correlationId <= correlationId)
-  }
-
-  override def processTick() = {
-    resendAllPending()
-  }
-
-  def handleRedeliveryMessages : Receive = {
-    case Acknowledge(x) => acknowledgeUpTo(x)
   }
 
   private case class InFlight(sentTime: Long, msg: T, correlationId: Long)

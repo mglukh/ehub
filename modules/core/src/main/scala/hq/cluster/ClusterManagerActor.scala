@@ -19,40 +19,32 @@ package hq.cluster
 import akka.actor._
 import akka.cluster.Cluster
 import common.actors._
-import hq.routing.MessageRouterActor
-import hq.{RegisterComponent, Subject}
+import hq.{ComponentKey, TopicKey}
 import play.api.libs.json.Json
 
 /**
  * Created by maks on 6/11/2014.
  */
-object ClusterManagerActor {
-  def start(implicit f: ActorRefFactory, cluster: Cluster) = f.actorOf(props, id)
-
+object ClusterManagerActor extends ActorObjWithCluster {
   def id = "cluster"
 
   def props(implicit cluster: Cluster) = Props(new ClusterManagerActor())
-
 }
-
 
 class ClusterManagerActor(implicit val cluster: Cluster)
   extends ActorWithComposableBehavior
-  with ActorWithSubscribers
-  with ActorWithClusterAwareness {
+  with ActorWithClusterAwareness
+  with SingleComponentActor {
 
-  val RouteId = ClusterManagerActor.id
-  val RouteNodes = Subject(RouteId, "nodes")
+  val T_NODES = TopicKey("nodes")
 
-  override def commonBehavior(): Actor.Receive = super.commonBehavior()
+  def key = ComponentKey(ClusterManagerActor.id)
 
-  override def preStart(): Unit = {
-    MessageRouterActor.path ! RegisterComponent(RouteId, self)
-    super.preStart()
-  }
+  override def commonBehavior: Actor.Receive = super.commonBehavior
 
   override def onClusterChangeEvent(): Unit = {
-    updateToAll(RouteNodes, nodesList)
+    logger.info("!>>> Cluster state changed")
+    topicUpdate(T_NODES, nodesList)
   }
 
   def nodesList = Some(Json.toJson(nodes.map { x =>
@@ -70,10 +62,12 @@ class ClusterManagerActor(implicit val cluster: Cluster)
     case x => "unknown"
   }
 
-  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
-    case RouteNodes =>
-      logger.info("!>>> request!")
-      updateTo(subject, ref, nodesList)
+
+  override def processTopicSubscribe(ref: ActorRef, topic: TopicKey) = topic match {
+    case T_NODES =>
+      logger.debug(s"!>> $ref Subscribed to list of nodes")
+      topicUpdate(T_NODES, nodesList, singleTarget = Some(ref))
   }
+
 
 }

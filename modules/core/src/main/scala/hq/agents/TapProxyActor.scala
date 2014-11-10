@@ -19,26 +19,47 @@ package hq.agents
 import agent.shared._
 import akka.actor._
 import akka.remote.DisassociatedEvent
-import common.actors.{ActorWithSubscribers, PipelineWithStatesActor}
-import hq.{RegisterComponent, Subject}
-import hq.routing.MessageRouterActor
-import play.api.libs.json.{JsArray, JsValue, Json}
+import common.actors.{PipelineWithStatesActor, SingleComponentActor}
+import hq.{ComponentKey, TopicKey}
+import play.api.libs.json.{JsValue, Json}
 
 
 object TapProxyActor {
-  def start(parentRoute: String, id: String, ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(parentRoute, id, ref), id)
+  def start(key: ComponentKey, ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(key, ref), key.toActorId)
 
-  def props(parentRoute: String, id: String, ref: ActorRef) = Props(new TapProxyActor(parentRoute, id, ref))
+  def props(key: ComponentKey, ref: ActorRef) = Props(new TapProxyActor(key, ref))
 }
 
-class TapProxyActor(parentRoute: String, id: String, ref: ActorRef) extends PipelineWithStatesActor with ActorWithSubscribers {
+class TapProxyActor(val key: ComponentKey, ref: ActorRef)
+  extends PipelineWithStatesActor
+  with SingleComponentActor {
 
-  val route = parentRoute + "/" + id
-  val AGENT_X_TAP_X_INFO = Subject(route, "info")
 
-  private var info: Option[JsValue] = None
+  private var info: Option[JsValue] = Some(Json.obj("id"->"Hello","name"->"haha")) // TODO
 
-  override def commonBehavior(): Actor.Receive = commonMessageHandler orElse super.commonBehavior()
+  override def commonBehavior: Actor.Receive = commonMessageHandler orElse super.commonBehavior
+
+  override def preStart(): Unit = {
+    ref ! CommunicationProxyRef(self)
+    context.parent ! TapAvailable(key)
+    context.system.eventStream.subscribe(self, classOf[DisassociatedEvent])
+    super.preStart()
+  }
+
+  override def postStop(): Unit = {
+    super.postStop()
+    context.system.eventStream.unsubscribe(self, classOf[DisassociatedEvent])
+  }
+
+  override def processTopicSubscribe(ref: ActorRef, topic: TopicKey) = topic match {
+    case T_INFO => topicUpdate(T_INFO, info, singleTarget = Some(ref))
+  }
+
+  override def processTopicCommand(sourceRef: ActorRef, topic: TopicKey, maybeData: Option[JsValue]) = topic match {
+    case T_START => ref ! OpenTap()
+    case T_STOP => ref ! CloseTap()
+    case T_KILL => ref ! RemoveTap()
+  }
 
   private def commonMessageHandler: Receive = {
     case GenericJSONMessage(jsonString) =>
@@ -56,31 +77,7 @@ class TapProxyActor(parentRoute: String, id: String, ref: ActorRef) extends Pipe
   private def processInfo(json: JsValue) = {
     info = Some(json)
     logger.debug(s"Received tap info update: $info")
-    updateToAll(AGENT_X_TAP_X_INFO, info)
-  }
-
-  override def preStart(): Unit = {
-    super.preStart()
-    ref ! CommunicationProxyRef(self)
-    MessageRouterActor.path ! RegisterComponent(route, self)
-    context.parent ! TapAvailable(route)
-    context.system.eventStream.subscribe(self, classOf[DisassociatedEvent])
-  }
-
-
-  override def postStop(): Unit = {
-    super.postStop()
-    context.system.eventStream.unsubscribe(self, classOf[DisassociatedEvent])
-  }
-
-  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
-    case AGENT_X_TAP_X_INFO => updateTo(subject, ref, info)
-  }
-
-  override def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = subject.topic match {
-    case "start" => ref ! OpenTap()
-    case "stop" => ref ! CloseTap()
-    case "kill" => ref ! RemoveTap()
+    topicUpdate(T_INFO, info)
   }
 
 

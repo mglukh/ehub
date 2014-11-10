@@ -18,21 +18,16 @@ package hq.routing
 
 import akka.actor._
 import akka.cluster.Cluster
-import common.actors.{NodeInfo, ActorWithClusterAwareness, ActorWithComposableBehavior, ActorWithSubscribers}
+import common.actors._
 import hq._
+import play.api.libs.json.JsValue
 
 import scala.collection.mutable
 import scala.concurrent.duration.DurationLong
 
 
-object MessageRouterActor {
-  def path(implicit f: ActorRefFactory) =
-    f.actorSelection("/user/" + id)
-
+object MessageRouterActor extends ActorObjWithCluster {
   def id = "router"
-
-  def start(implicit f: ActorRefFactory, cluster: Cluster) = f.actorOf(props, id)
-
   def props(implicit cluster: Cluster) = Props(new MessageRouterActor())
 }
 
@@ -43,127 +38,132 @@ case class RemoveIfInactive(ref: ActorRef)
 
 class MessageRouterActor(implicit val cluster: Cluster)
   extends ActorWithComposableBehavior
-  with ActorWithSubscribers
+  with ActorWithRemoteSubscribers
   with ActorWithClusterAwareness {
 
-  def myNodeIsTarget(subj: Subject) = subj.address == myAddress
-
-  val updatesCache: mutable.Map[Subject, Update] = new mutable.HashMap[Subject, Update]()
-  val staticRoutes: mutable.Map[String, ProviderState] = new mutable.HashMap[String, ProviderState]()
-
+  val updatesCache: mutable.Map[RemoteSubj, Any] = new mutable.HashMap[RemoteSubj, Any]()
   implicit val ec = context.dispatcher
+  var staticRoutes: Map[ComponentKey, ProviderState] = Map[ComponentKey, ProviderState]()
 
-  override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
+  override def commonBehavior: Actor.Receive = handler orElse super.commonBehavior
 
-
-  override def onClusterMemberUp(info: NodeInfo): Unit = {
-    collectSubjects(_.address==info.address.toString).foreach { subj =>
-      forwardToClusterNode(info.address.toString,Subscribe(subj))
-    }
+  def myNodeIsTarget(subj: Any): Boolean = subj match {
+    case LocalSubj(_, _) => true
+    case RemoteSubj(addr, _) => addr == myAddress
+    case _ => true
   }
 
+  override def onClusterMemberUp(info: NodeInfo): Unit =
+    if (info.address.toString != myAddress)
+      collectSubjects(_.address == info.address.toString).foreach { subj =>
+        forwardToClusterNode(info.address.toString, Subscribe(self, subj))
+      }
 
-  override def onClusterMemberRemoved(info: NodeInfo): Unit = {
-    collectSubjects(_.address == info.address.toString).foreach { subj =>
-      publishToClients(Stale(subj))
-    }
-  }
+  override def onClusterMemberRemoved(info: NodeInfo): Unit =
+    if (info.address.toString != myAddress)
+      collectSubjects(_.address == info.address.toString).foreach { subj =>
+        publishToClients(subj, Stale(self, _))
+      }
 
   override def onClusterMemberUnreachable(info: NodeInfo): Unit = {
-    collectSubjects(_.address == info.address.toString).foreach { subj =>
-      publishToClients(Stale(subj))
-    }
-  }
-
-  private def handler: Receive = {
-    case Command(subj, data) => publishToProviders(Command(subj, data))
-    case RegisterComponent(route, ref) => register(ref, route)
-    case u: Update => processUpdate(u)
-    case Terminated(ref) if isProviderRef(ref) =>
-      staticRoutes.collect {
-        case (route, thatRef) if ref == thatRef.ref => route
-      } foreach { route =>
-        staticRoutes += (route -> ProviderState(ref, active = false))
+    if (info.address.toString != myAddress)
+      collectSubjects(_.address == info.address.toString).foreach { subj =>
+        publishToClients(subj, Stale(self, _))
       }
-      logger.info(s"Actor $ref terminated, pending removal in 30 sec")
-      context.system.scheduler.scheduleOnce(30.seconds, self, RemoveIfInactive(ref))
-    case RemoveIfInactive(ref) => removeRoute(ref)
   }
 
-
-  def publishToProviders(msg: HQCommMsg): Unit = {
-    val route = msg.subj.route
-    if (myNodeIsTarget(msg.subj)) {
-      forwardToClusterNode(msg.subj.address, msg)
+  def forwardDownstream(subj: RemoteSubj, msg: Any): Unit = {
+    if (!myNodeIsTarget(subj)) {
+      logger.debug(s"$msg -> ${subj.address}")
+      forwardToClusterNode(subj.address, msg)
     } else {
-      staticRoutes.get(route) match {
-        case Some(ProviderState(ref, true)) => ref ! msg
-        case Some(ProviderState(ref, false)) =>
-          logger.debug(s"Route $route is inactive, message dropped")
-        case None => logger.warn(s"Unknown route $route, message dropped")
-      }
+      logger.debug(s"$msg -> ${subj.localSubj}")
+      forwardToLocalProviders(subj.localSubj, msg)
     }
   }
 
-  def register(ref: ActorRef, route: String): Unit = {
-    staticRoutes += route -> ProviderState(ref, active = true)
+  def forwardToLocalProviders(subj: LocalSubj, msg: Any) = {
+    val component = subj.component
+    staticRoutes.get(component) match {
+      case Some(ProviderState(ref, true)) => ref ! msg
+      case Some(ProviderState(ref, false)) =>
+        logger.debug(s"Route $component is inactive, message dropped")
+      case None => logger.warn(s"Unknown route $component, message dropped")
+    }
+  }
+
+  def register(ref: ActorRef, component: ComponentKey): Unit = {
+    staticRoutes += component -> ProviderState(ref, active = true)
     context.watch(ref)
-    logger.info(s"Registered new static route $route -> $ref")
-    collectSubjects{ subj => subj.route == route && myNodeIsTarget(subj)}.foreach { subj =>
+    logger.info(s"Registered new static route $component -> $ref")
+    collectSubjects { subj => subj.localSubj.component == component && myNodeIsTarget(subj)}.foreach { subj =>
       logger.info(s"Subscribing to $subj with downstream component")
-      publishToProviders(Subscribe(subj))
+      forwardDownstream(subj, Subscribe(self, subj))
     }
   }
 
-  def processUpdate(update: Update): Unit = {
-    if (update.canBeCached) remember(update) else clearCacheFor(update.subj)
-    publishToClients(update)
-  }
+  def remember(subj: RemoteSubj, update: Any) = updatesCache += (subj -> update)
 
-  def remember(update: Update) = updatesCache += (update.subj -> update)
+  def clearCacheFor(subject: RemoteSubj) = updatesCache.remove(subject)
 
-  def clearCacheFor(subject: Subject) = updatesCache.remove(subject)
-
-  def publishToClients(msg: HQCommMsg): Unit = subscribersFor(msg.subj) foreach (_.foreach { actor =>
-    actor ! msg
-    logger.debug(s"s2c: $msg -> $actor")
-  })
-
-  def removeRoute(ref: ActorRef): Unit = {
-    val routesToRemove = staticRoutes.collect {
-      case (route, ProviderState(thatRef, false)) if ref == thatRef => route
-    }
-    routesToRemove foreach { route =>
-      logger.info(s"Removing route: $route")
-      
-      collectSubjects { subj =>
-          subj.route == route && myNodeIsTarget(subj)
-      } foreach { subj =>
-          publishToClients(Stale(subj))
+  def publishToClients(subj: Any, f: RemoteSubj => Any) =
+    convertSubject(subj) foreach { subj =>
+      val msg = f(subj)
+      remember(subj, msg)
+      subscribersFor(subj) foreach { setOfActors =>
+        setOfActors.foreach { actor =>
+          actor ! msg
+          logger.debug(s"s2c: $msg -> $actor")
+        }
       }
-      context.unwatch(ref)
-      staticRoutes.remove(route);
     }
-  }
 
-  def isProviderRef(ref: ActorRef) = staticRoutes.exists {
-    case (route, provState) => provState.ref == ref
-  }
+  def removeRoute(ref: ActorRef): Unit =
+    staticRoutes = staticRoutes.filter {
+      case (component, ProviderState(thatRef, false)) if ref == thatRef =>
+        logger.info(s"Removing route: $component")
+        collectSubjects { subj =>
+          subj.localSubj.component == component && myNodeIsTarget(subj)
+        } foreach { subj =>
+          publishToClients(subj, Stale(self, _))
+        }
+        context.unwatch(ref) // can be removed
+        false
+      case _ => true
+    }
 
-  override def firstSubscriber(subject: Subject): Unit = {
-    publishToProviders(Subscribe(subject))
-  }
+  def isProviderRef(ref: ActorRef) = staticRoutes.exists { case (_, provState) => provState.ref == ref}
 
-  override def lastSubscriberGone(subject: Subject): Unit = {
-    publishToProviders(Unsubscribe(subject))
+  override def firstSubscriber(subject: RemoteSubj) = forwardDownstream(subject, Subscribe(self, subject))
+
+  override def lastSubscriberGone(subject: RemoteSubj) = {
+    forwardDownstream(subject, Unsubscribe(self, subject))
     clearCacheFor(subject)
   }
 
-  override def processUnsubscribeRequest(ref: ActorRef, subject: Subject): Unit = {
-  }
-
-  override def processSubscribeRequest(ref: ActorRef, subject: Subject): Unit = {
+  override def processSubscribeRequest(ref: ActorRef, subject: RemoteSubj) =
     updatesCache.get(subject) foreach (ref ! _)
+
+  override def processUnsubscribeRequest(ref: ActorRef, subject: RemoteSubj) =
+    super.processUnsubscribeRequest(ref, subject)
+
+  override def processCommand(ref: ActorRef, subject: RemoteSubj, maybeData: Option[JsValue]) =
+    forwardDownstream(subject, Command(self, subject, maybeData))
+
+  private def handler: Receive = {
+    case Update(_, subj, data, cacheable) => publishToClients(subj, Update(self, _, data, cacheable))
+    case RegisterComponent(component, ref) => register(ref, component)
+    case Terminated(ref) if isProviderRef(ref) =>
+      staticRoutes = staticRoutes.map {
+        case (component, state) if ref == state.ref => component -> ProviderState(ref, active = false)
+        case (component, state) => component -> state
+      }
+      scheduleRemoval(ref)
+    case RemoveIfInactive(ref) => removeRoute(ref)
   }
 
+  private def scheduleRemoval(ref: ActorRef) {
+    logger.info(s"Actor $ref terminated, pending removal in 30 sec")
+    context.system.scheduler.scheduleOnce(30.seconds, self, RemoveIfInactive(ref))
+  }
 }

@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
 define(['react', 'subscriberMixin', 'admin/agent/ListItem'], function (React, subscriberMixin, ListItem) {
 
     return React.createClass({
@@ -28,10 +28,11 @@ define(['react', 'subscriberMixin', 'admin/agent/ListItem'], function (React, su
         },
 
         renderData: function() {
+            var props = this.props;
             return (
                 <div>
                 {this.state.list.map(function (el) {
-                    return <ListItem addr={this.props.addr} key={el.id} id={el.id}/>;
+                    return <ListItem handleSelection={props.handleSelection} addr={props.addr} key={el.id} id={el.id}/>;
                     })}
                 </div>
             );

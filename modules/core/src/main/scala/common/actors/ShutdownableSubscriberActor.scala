@@ -22,7 +22,7 @@ import common.Stop
 
 trait ShutdownableSubscriberActor extends ActorSubscriber with ActorWithComposableBehavior {
 
-  override def commonBehavior(): Receive = handleSubscriberShutdown orElse super.commonBehavior()
+  override def commonBehavior: Receive = handleSubscriberShutdown orElse super.commonBehavior
 
   private def stop(reason: Option[String]) = {
     logger.info(s"Shutting down subscriber, reason given: $reason")

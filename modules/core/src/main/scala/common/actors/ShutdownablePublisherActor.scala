@@ -22,7 +22,7 @@ import common.Stop
 
 trait ShutdownablePublisherActor[T] extends ActorPublisher[T] with ActorWithComposableBehavior {
 
-  override def commonBehavior(): Receive = handlePublisherShutdown orElse super.commonBehavior()
+  override def commonBehavior: Receive = handlePublisherShutdown orElse super.commonBehavior
 
   private def stop(reason: Option[String]) = {
     logger.info(s"Shutting down publisher, reason given: $reason")

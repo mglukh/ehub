@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
 define([
         'react',
         'subscriberMixin',
@@ -36,10 +36,14 @@ define([
                 return {info: null, selected: false}
             },
 
+            handleClick: function() {
+                this.props.handleSelection(this.props.id);
+            },
+
             renderData: function () {
                 return (
                     <div>
-                    <a href="#" onClick={this.props.handleSelection(this.props.id)}>{this.state.info.name}</a> {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
+                    <a href="#" onClick={this.handleClick}>{this.state.info.name}</a> {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
                         <StartStopButton addr={this.props.addr} state={this.state.info.state} route={this.props.id} />
                     </div>
                 );

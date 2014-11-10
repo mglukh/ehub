@@ -22,7 +22,10 @@ define(['wsclient'], function(client) {
 
             this.handle = client.getHandle();
 
+            console.debug("!>>>> created");
+
             function wsOpenHandler() {
+                console.debug("!>>>> CONNECTED");
                 self.setState({connected: true});
                 console.debug("onConnected()" );
             }
@@ -36,6 +39,13 @@ define(['wsclient'], function(client) {
             this.handle.addWsClosedEventListener(wsClosedHandler);
 
             this.sendCommand = this.handle.command;
+
+            if (this.handle.connected) {
+                wsOpenHandler();
+            } else {
+                wsClosedHandler();
+            }
+
         },
 
         stopListener: function () {
@@ -44,6 +54,7 @@ define(['wsclient'], function(client) {
             }
         },
         componentDidMount: function() {
+            console.debug("!>>>> mounted");
             this.startListener();
             if (this.onMount) {
                 this.onMount();

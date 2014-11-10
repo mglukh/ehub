@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
 define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
 
     // use this.sendCommand(subject, data) to talk to server
@@ -29,15 +29,15 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
 
         handleAdd: function(e) {
             var name = this.refs.name.getDOMNode().value.trim();
-            var config = this.refs.config.getDOMNode().value.trim();
+            var config = JSON.parse(this.refs.config.getDOMNode().value.trim());
             if (!name || !config) return;
 
-            this.sendCommand(this.props.id, "addTap", {name: name, config: config});
+            this.sendCommand(this.props.addr, this.props.id, "addTap", {name: name, config: config});
 
             this.refs.name.getDOMNode().value = null;
             this.refs.config.getDOMNode().value = null;
 
-            $('#myModal').modal('hide');
+            $('#addTapModal').modal('hide');
             return true;
         },
 
@@ -50,11 +50,11 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
 
             return (
                 <div>
-                    <button type="button" className={"btn btn-primary btn-sm " + buttonClasses} data-toggle="modal" data-target="#myModal" >
+                    <button type="button" className={"btn btn-primary btn-sm " + buttonClasses} data-toggle="modal" data-target="#addTapModal" >
                     Add new tap
                     </button>
 
-                    <div className="modal fade" id="myModal" tabIndex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                    <div className="modal fade" id="addTapModal" tabIndex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
                         <div className="modal-dialog">
                             <div className="modal-content">
                                 <div className="modal-header">
@@ -63,7 +63,7 @@ define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
                                 </div>
                                 <div className="modal-body">
                                     <input type="text" className="form-control" ref="name" placeholder="Tap name"/>
-                                    <input type="text" className="form-control" ref="config" placeholder="Tap config"/>
+                                    <textarea className="form-control" ref="config" placeholder="Tap config"></textarea>
                                 </div>
                                 <div className="modal-footer">
                                     <button type="button" className="btn btn-default" data-dismiss="modal">Close</button>

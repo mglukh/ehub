@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
 define([
         'react',
         'subscriberMixin',
@@ -23,13 +23,14 @@ define([
     ],
     function (React,
               subscriberMixin,
-              StartStopButton) {
+              StartStopButton,
+              DeleteButton) {
 
         return React.createClass({
             mixins: [subscriberMixin],
 
             subscriptionConfig: function () {
-                return {route: this.props.id, topic: 'info', target: 'info'};
+                return {address: this.props.addr, route: this.props.id, topic: 'info', target: 'info'};
             },
             getInitialState: function () {
                 return {info: null}
@@ -39,8 +40,9 @@ define([
                 return (
                     <div>
                     {this.state.info.name} {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
-                        <StartStopButton state={this.state.info.state} route={this.props.id} /> :
-                        <DeleteButton route={this.props.id} />
+                        <StartStopButton  addr={this.props.addr} state={this.state.info.state} route={this.props.id} />
+                    :
+                        <DeleteButton  addr={this.props.addr} route={this.props.id} />
                     </div>
                 );
             },

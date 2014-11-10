@@ -1,3 +1,5 @@
+/** @jsx React.DOM */
+
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/** @jsx React.DOM */
 define(['react','admin/gate/ListContainer','admin/agent/ListContainer'],
     function (React, GatesContainer, AgentsContainer) {
 

@@ -57,7 +57,7 @@ class SubscriberBoundaryInitiatingActor(endpoint: String)
     super.preStart()
   }
 
-  override def receive: Actor.Receive = commonBehavior()
+  override def receive: Actor.Receive = commonBehavior
 
   override def becomeActive(): Unit = {
     logger.info(s"Sink becoming active")

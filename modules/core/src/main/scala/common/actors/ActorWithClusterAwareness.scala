@@ -17,7 +17,6 @@
 package common.actors
 
 import akka.actor.{Actor, ActorRef, Address}
-import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
 import akka.util.Timeout
 import hq.routing.MessageRouterActor
@@ -40,11 +39,7 @@ case class NodeInfo(state: NodeState, address: Address, roles: Set[String]) exte
 case class ClusterActorId(address: String, id: String)
 
 
-trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
-
-
-  implicit val cluster: Cluster
-  val myAddress = cluster.selfAddress.toString
+trait ActorWithClusterAwareness extends ActorWithCluster {
 
   var nodes: List[NodeInfo] = List[NodeInfo]()
   private var refCache: Map[ClusterActorId, ActorRef] = new HashMap[ClusterActorId, ActorRef]()
@@ -52,15 +47,57 @@ trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
   def forwardToClusterNode(address: String, msg: Any): Unit = {
     if (nodeIsUp(address)) {
       locateRefFor(address, MessageRouterActor.id) match {
-        case Some(ref) => ref ! msg
-        case None => selectionFor(address, MessageRouterActor.id) ! msg
+        case Some(ref) =>
+          logger.debug(s"!>>> $msg -> $ref")
+          ref ! msg
+        case None =>
+          val sel = selectionFor(address, MessageRouterActor.id)
+          logger.debug(s"!>>> $msg -> $sel")
+          sel ! msg
       }
     } else {
       logger.info(s"Node $address is not up, message dropped")
     }
   }
 
-  override def commonBehavior(): Actor.Receive = commonMessagesHandler orElse super.commonBehavior()
+  override def commonBehavior: Actor.Receive = commonMessagesHandler orElse super.commonBehavior
+
+  def nodeIsUp(address: String): Boolean = nodes.exists {
+    case node => node.address.toString == address && node.state == Up()
+  }
+
+  def onClusterMemberUp(info: NodeInfo): Unit = {}
+
+  def onClusterMemberUnreachable(info: NodeInfo): Unit = {}
+
+  def onClusterMemberRemoved(info: NodeInfo): Unit = {}
+
+  def onClusterChangeEvent(): Unit = {}
+
+  def resolveActorInCluster(address: String, id: String) = {
+    implicit val timeout = Timeout(5.seconds)
+    implicit val ec = context.dispatcher
+    selectionFor(address, id).resolveOne() onComplete {
+      case Success(result) => refCache += ClusterActorId(address, id) -> result
+      case Failure(failure) => context.system.scheduler.scheduleOnce(5.seconds, self, ResolveRetry(address, id))
+    }
+  }
+
+  def selectionFor(address: String, id: String) = {
+    logger.info(s"!>>> using $context to resolve ${address + "/user/" + id} into " + context.actorSelection(address + "/user/" + id))
+    context.actorSelection(address + "/user/" + id)
+  }
+
+  override def preStart(): Unit = {
+    super.preStart()
+    cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
+      classOf[MemberEvent], classOf[UnreachableMember], classOf[ReachableMember])
+  }
+
+  override def postStop(): Unit = {
+    cluster.unsubscribe(self)
+    super.postStop()
+  }
 
   private def commonMessagesHandler: Actor.Receive = {
     case ResolveRetry(address, id) =>
@@ -109,41 +146,7 @@ trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
 
   }
 
-  def nodeIsUp(address: String): Boolean = nodes.exists {
-    case node => node.address.toString == address && node.state == Up()
-  }
-
-  def onClusterMemberUp(info: NodeInfo): Unit = {}
-
-  def onClusterMemberUnreachable(info: NodeInfo): Unit = {}
-
-  def onClusterMemberRemoved(info: NodeInfo): Unit = {}
-
-  def onClusterChangeEvent(): Unit = {}
-
   private def resolveMessageRouter(address: String) = resolveActorInCluster(address, MessageRouterActor.id)
-
-  def resolveActorInCluster(address: String, id: String) = {
-    implicit val timeout = Timeout(5.seconds)
-    implicit val ec = context.dispatcher
-    selectionFor(address, id).resolveOne() onComplete {
-      case Success(result) => refCache += ClusterActorId(address, id) -> result
-      case Failure(failure) => context.system.scheduler.scheduleOnce(5.seconds, self, ResolveRetry(address, id))
-    }
-  }
-
-  def selectionFor(address: String, id: String) = context.actorSelection(address + "/user/" + id)
-
-  override def preStart(): Unit = {
-    super.preStart()
-    cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
-      classOf[MemberEvent], classOf[UnreachableMember], classOf[ReachableMember])
-  }
-
-  override def postStop(): Unit = {
-    cluster.unsubscribe(self)
-    super.postStop()
-  }
 
   private def cleanRefCacheFor(address: Address) = {
     val addr = address.toString
@@ -156,9 +159,11 @@ trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
   private def locateRefFor(address: String, id: String): Option[ActorRef] =
     refCache.get(ClusterActorId(address, id))
 
-  case class ResolveRetry(address: String, id: String)
 
 }
+
+case class ResolveRetry(address: String, id: String)
+
 
 
 

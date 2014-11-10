@@ -17,46 +17,39 @@
 package hq.gates
 
 import akka.actor._
-import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
+import common.actors.{ActorObjWithoutConfig, ActorWithComposableBehavior, SingleComponentActor}
 import hq._
-import hq.routing.MessageRouterActor
 import play.api.libs.json.{JsValue, Json}
 
 
-object GateManagerActor {
+object GateManagerActor extends ActorObjWithoutConfig {
   def id = "gates"
 
   def props = Props(new GateManagerActor())
-
-  def start(implicit f: ActorRefFactory) = f.actorOf(props, id)
 }
 
-case class GateAvailable(id: String)
+case class GateAvailable(id: ComponentKey)
 
-class GateManagerActor extends ActorWithComposableBehavior
-with ActorWithSubscribers {
+class GateManagerActor
+  extends ActorWithComposableBehavior
+  with SingleComponentActor {
 
-  val GATES_LIST = Subject("gates", "list")
+  override val key = ComponentKey("gates")
 
-  var gates: Map[String, ActorRef] = Map()
+  var gates: Map[ComponentKey, ActorRef] = Map()
 
-  override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
+  override def commonBehavior: Actor.Receive = handler orElse super.commonBehavior
 
-  override def preStart(): Unit = {
-    super.preStart()
-    MessageRouterActor.path ! RegisterComponent("gates", self)
+  def list = Some(Json.toJson(gates.keys.map { x => Json.obj("id" -> x.key)}.toArray))
+
+
+  override def processTopicSubscribe(ref: ActorRef, topic: TopicKey) = topic match {
+    case T_LIST => topicUpdate(topic, list, singleTarget = Some(ref))
   }
 
 
-  def list = Some(Json.toJson(gates.keys.map { x => Json.obj("id" -> x)}.toArray))
-
-  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
-    case GATES_LIST => updateTo(subject, ref, list)
-  }
-
-
-  override def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = subject.topic match {
-    case "add" =>
+  override def processTopicCommand(ref: ActorRef, topic: TopicKey, maybeData: Option[JsValue]) = topic match {
+    case T_ADD =>
       for (
         data <- maybeData;
         name <- (data \ "name").asOpt[String]
@@ -66,16 +59,15 @@ with ActorWithSubscribers {
       }
   }
 
-
   def handler: Receive = {
     case GateAvailable(route) =>
       gates = gates + (route -> sender())
-      updateToAll(GATES_LIST, list)
+      topicUpdate(TopicKey("list"), list)
     case Terminated(ref) =>
       gates = gates.filter {
-        case (route,otherRef) => otherRef != ref
+        case (route, otherRef) => otherRef != ref
       }
-      updateToAll(GATES_LIST, list)
+      topicUpdate(TopicKey("list"), list)
   }
 
 

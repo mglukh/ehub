@@ -28,17 +28,17 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
   implicit private val ec = context.dispatcher
 
 
-  private var peer : Option[ActorRef] = None
+  private var peer: Option[ActorRef] = None
 
-  def connectionEndpoint : String
+  override final def remoteActorRef: Option[ActorRef] = peer
+
+  def connectionEndpoint: String
 
   def remoteAssociationTimeout = 5.seconds
 
   def reconnectAttemptInterval = 3.seconds
 
-  override final def remoteActorRef : Option[ActorRef] = peer
-
-  def connected : Boolean = peer.isDefined
+  def connected: Boolean = peer.isDefined
 
   override def preStart(): Unit = {
     context.system.eventStream.subscribe(self, classOf[DisassociatedEvent])
@@ -55,12 +55,12 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
     context.system.scheduler.scheduleOnce(duration, self, Associate())
   }
 
-  def disconnect() : Unit = {
+  def disconnect(): Unit = {
     if (peer.isDefined) self ! DisconnectedState()
     peer = None
   }
 
-  def initiateReconnect() : Unit = {
+  def initiateReconnect(): Unit = {
     disconnect()
     val addr = actorSelection
     logger.info(s"Trying to connect to $addr")
@@ -70,9 +70,7 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
     }
   }
 
-  private def actorSelection = context.actorSelection(connectionEndpoint)
-
-  def handleReconnectMessages : Receive = {
+  def handleReconnectMessages: Receive = {
     case Connected(ref) =>
       logger.info(s"Connected to $ref")
       peer = Some(ref)
@@ -91,13 +89,17 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
       scheduleReconnect()
   }
 
+  private def actorSelection = context.actorSelection(connectionEndpoint)
+
+  case class AssociationFailed(cause: Throwable)
+
+  case class ConnectedState()
+
+  case class DisconnectedState()
 
   private case class Connected(ref: ActorRef)
-  private case class Associate()
 
-  case class AssociationFailed(cause : Throwable)
-  case class ConnectedState()
-  case class DisconnectedState()
+  private case class Associate()
 
 
 }

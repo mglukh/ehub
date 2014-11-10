@@ -19,7 +19,7 @@ package agent.controller.flow
 import java.nio.charset.Charset
 
 import agent.flavors.files._
-import agent.shared.MessageWithAttachments
+import agent.shared.{CloseTap, OpenTap, MessageWithAttachments}
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.{ActorPublisher, ActorSubscriber}
 import akka.stream.scaladsl2._
@@ -34,9 +34,9 @@ object TapActor {
   def props(flowId: Long, config: JsValue, state: Option[JsValue])(implicit mat: FlowMaterializer, system: ActorSystem) = Props(new TapActor(flowId, config, state))
 }
 
-case class StartFlowInstance()
-
-case class SuspendFlowInstance()
+//case class StartFlowInstance()
+//
+//case class SuspendFlowInstance()
 
 case class TapConfigUpdate(flowId: Long, config: JsValue)
 
@@ -135,7 +135,7 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
 
       (config \ "class").asOpt[String] match {
         case Some("file") => buildFileProducer(fId, config \ "props")
-        case _ => throw new IllegalArgumentException(config.toString())
+        case _ => throw new IllegalArgumentException(Json.stringify(config))
       }
     }
 
@@ -192,7 +192,7 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
   }
 
 
-  override def commonBehavior(): Receive = super.commonBehavior() orElse {
+  override def commonBehavior: Receive = super.commonBehavior orElse {
     case Acknowledged(id, msg) => msg match {
       case ProducedMessage(_, c: Cursor) =>
         for (
@@ -203,13 +203,13 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
   }
 
   private def suspended: Receive = {
-    case StartFlowInstance() =>
+    case OpenTap() =>
       startFlow()
       switchToCustomBehavior(started)
   }
 
   private def started: Receive = {
-    case SuspendFlowInstance() =>
+    case CloseTap() =>
       stopFlow()
       switchToCustomBehavior(suspended)
   }

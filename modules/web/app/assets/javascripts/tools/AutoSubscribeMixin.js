@@ -63,13 +63,13 @@ define(['wsclient'], function (client) {
 
             function wsOpenHandler() {
                 self.setState({connected: true});
-                console.debug("onConnected() for " + this.componentId());
+                console.debug("onConnected() for " + componentId());
                 subscribe();
             }
 
             function wsClosedHandler() {
                 self.setState({connected: false});
-                console.debug("onDisconnected() for " + this.componentId());
+                console.debug("onDisconnected() for " + componentId());
             }
 
             this.handle.addWsOpenEventListener(wsOpenHandler);
@@ -84,7 +84,7 @@ define(['wsclient'], function (client) {
                 wsClosedHandler();
             }
 
-            console.debug("Initiated subscription for " + this.componentId());
+            console.debug("Initiated subscription for " + componentId());
         },
         stopSubscription: function () {
             if (this.handle) {

@@ -15,10 +15,10 @@ object Global extends GlobalSettings with scalalogging.StrictLogging {
 
   override def onStart(app: Application): Unit = {
 
-    val clusterSystem =  ActorSystem("ehubhq",ConfigFactory.load("akka-play.conf"))
-    implicit val cluster = Cluster(clusterSystem)
-
     implicit val system =  Akka.system()
+//    val clusterSystem =  ActorSystem("ehubhq",ConfigFactory.load("akka-play.conf"))
+    implicit val cluster = Cluster(system)
+
     implicit val ec = system.dispatcher
 
     MessageRouterActor.start

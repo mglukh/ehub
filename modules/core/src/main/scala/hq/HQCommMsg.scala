@@ -17,18 +17,36 @@
 package hq
 
 import akka.actor.ActorRef
+import common.actors.ActorUtils
 import play.api.libs.json.JsValue
 
-trait HQCommMsg {
-  val subj: Subject
+trait HQCommMsg[T] {
+  val sourceRef: ActorRef
+  val subj: T
 }
 
-case class Subject(address: String, route: String, topic: String)
+trait Subj
 
-case class Subscribe(subj: Subject) extends HQCommMsg
-case class Unsubscribe(subj: Subject) extends HQCommMsg
-case class Command(subj: Subject, data: Option[JsValue] = None) extends HQCommMsg
-case class Update(subj: Subject, data: JsValue, canBeCached: Boolean = true) extends HQCommMsg
-case class Stale(subj: Subject) extends HQCommMsg
+case class TopicKey(key: String)
 
-case class RegisterComponent(route: String, ref: ActorRef)
+case class ComponentKey(key: String) {
+  def /(s: String) = ComponentKey(key + "/" + s)
+  def toActorId = key.replaceAll("""[\W]""", "_").replaceAll("__", "_")
+}
+
+case class LocalSubj(component: ComponentKey, topic: TopicKey) extends Subj
+
+case class RemoteSubj(address: String, localSubj: LocalSubj) extends Subj
+
+
+case class Subscribe(sourceRef: ActorRef, subj: Any) extends HQCommMsg[Any]
+
+case class Unsubscribe(sourceRef: ActorRef, subj: Any) extends HQCommMsg[Any]
+
+case class Command(sourceRef: ActorRef, subj: Any, data: Option[JsValue] = None) extends HQCommMsg[Any]
+
+case class Update(sourceRef: ActorRef, subj: Any, data: JsValue, canBeCached: Boolean = true) extends HQCommMsg[Any]
+
+case class Stale(sourceRef: ActorRef, subj: Any) extends HQCommMsg[Any]
+
+case class RegisterComponent(component: ComponentKey, ref: ActorRef)
