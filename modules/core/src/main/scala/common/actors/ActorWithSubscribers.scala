@@ -7,9 +7,6 @@ import play.api.libs.json.JsValue
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
-/**
- * Created by maks on 4/11/2014.
- */
 trait ActorWithSubscribers extends ActorWithComposableBehavior {
 
   private val subscribers : mutable.Map[Subject, Set[ActorRef]] = new mutable.HashMap[Subject, Set[ActorRef]]()
