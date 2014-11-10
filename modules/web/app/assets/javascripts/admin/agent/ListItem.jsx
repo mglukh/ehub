@@ -2,11 +2,13 @@
 define([
         'react',
         'subscriberMixin',
-        'admin/gate/StartStopButton'
+        'admin/gate/StartStopButton',
+        'admin/agent/datatap/ListContainer'
     ],
     function (React,
               subscriberMixin,
-              StartStopButton) {
+              StartStopButton,
+              TapListContainer) {
 
         return React.createClass({
             mixins: [subscriberMixin],
@@ -15,13 +17,13 @@ define([
                 return {route: this.props.id, topic: 'info', target: 'info'};
             },
             getInitialState: function () {
-                return {info: null}
+                return {info: null, selected: false}
             },
 
             renderData: function () {
                 return (
                     <div>
-                    {this.state.info.name} {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
+                    <a href="#" onClick={this.props.handleSelection(this.props.id)}>{this.state.info.name}</a> {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
                         <StartStopButton state={this.state.info.state} route={this.props.id} />
                     </div>
                 );

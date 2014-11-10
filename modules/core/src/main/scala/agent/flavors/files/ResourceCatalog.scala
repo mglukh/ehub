@@ -39,7 +39,7 @@ class H2ResourceCatalog(flowId: Long, dir: File, fileName: String = ".idx") exte
   class FileIndex(tag: Tag) extends Table[(Long, Long, Long, String, String, Long, Long)](tag, "findex") {
     def * = (flowId, seed, resourceId, dir, name, createdTimestamp, sizeNow)
 
-    def flowId = column[Long]("flowId")
+    def flowId = column[Long]("tapId")
     def seed = column[Long]("seed")
     def resourceId = column[Long]("resourceId")
 

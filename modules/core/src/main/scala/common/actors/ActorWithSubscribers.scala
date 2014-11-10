@@ -1,7 +1,7 @@
 package common.actors
 
 import akka.actor.{Actor, ActorRef, Terminated}
-import hq.{Subject, Subscribe, Unsubscribe, Update}
+import hq._
 import play.api.libs.json.JsValue
 
 import scala.collection.immutable.HashSet
@@ -22,6 +22,7 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
   def lastSubscriberGone(subject: Subject) = {}
   def processSubscribeRequest(ref: ActorRef, subject: Subject) = {}
   def processUnsubscribeRequest(ref: ActorRef, subject: Subject) = {}
+  def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = {}
 
   def collectSubjects(f: Subject => Boolean) = subscribers.collect {
     case (sub, set) if f(sub) => sub
@@ -83,6 +84,8 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
       addSubscriber(sender(), subj)
     case Unsubscribe(subj) =>
       removeSubscriber(sender(), subj)
+    case Command(subj, data) =>
+      processCommand(sender(), subj, data)
     case Terminated(ref) if watchedSubscribers contains ref =>
       removeSubscriber(ref)
   }

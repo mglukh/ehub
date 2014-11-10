@@ -1,6 +1,7 @@
 package agent.controller
 
-import akka.actor.ActorSystem
+import agent.controller.storage.ConfigStorageActor
+import akka.actor.{ActorRef, ActorSystem}
 import com.typesafe.config.ConfigFactory
 
 /**
@@ -12,5 +13,7 @@ object AgentLauncher extends App {
 
   implicit val config = ConfigFactory.load("agent.conf")
 
-  system.actorOf(AgentControllerActor.props, "controller")
+  ConfigStorageActor.start
+  AgentControllerActor.start
+
 }

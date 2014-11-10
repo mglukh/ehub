@@ -3,7 +3,7 @@ package common.actors
 import akka.actor.Actor
 import com.typesafe.scalalogging.StrictLogging
 
-trait ActorWithComposableBehavior extends Actor with StrictLogging {
+trait ActorWithComposableBehavior extends ActorUtils with StrictLogging {
 
   def commonBehavior() : Receive = {
     case msg : Loggable => logger.info(String.valueOf(msg))

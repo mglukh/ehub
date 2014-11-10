@@ -6,7 +6,7 @@ import akka.remote.DisassociatedEvent
 import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
 import hq.routing.MessageRouterActor
 import hq.{RegisterComponent, Subject}
-import play.api.libs.json.Json
+import play.api.libs.json.{JsValue, Json}
 
 object AgentsManagerActor {
   def start(implicit f: ActorRefFactory) = f.actorOf(props, id)
@@ -26,9 +26,9 @@ class AgentsManagerActor extends ActorWithComposableBehavior with ActorWithSubsc
   override def commonBehavior(): Actor.Receive = handler orElse super.commonBehavior()
 
   private def handler: Receive = {
-    case Handshake(name) =>
-      logger.info("Received handshake from " + sender())
-      context.watch(AgentProxyActor.start(name, sender()))
+    case Handshake(ref, name) =>
+      logger.info("Received handshake from " + ref)
+      context.watch(AgentProxyActor.start(name, ref))
     case AgentAvailable(name) =>
       agents = agents + (name -> sender())
       updateToAll(AGENTS_LIST, list)

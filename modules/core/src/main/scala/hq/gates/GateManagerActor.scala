@@ -39,7 +39,7 @@ with ActorWithSubscribers {
   }
 
 
-  def handleCommand(topic: String, maybeData: Option[JsValue]) = topic match {
+  override def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = subject.topic match {
     case "add" =>
       for (
         data <- maybeData;
@@ -52,8 +52,6 @@ with ActorWithSubscribers {
 
 
   def handler: Receive = {
-    case Command(subj, data) =>
-      handleCommand(subj.topic, data)
     case GateAvailable(route) =>
       gates = gates + (route -> sender())
       updateToAll(GATES_LIST, list)

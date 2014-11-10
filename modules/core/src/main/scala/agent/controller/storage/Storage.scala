@@ -61,7 +61,7 @@ case class H2Storage(implicit config: Config) extends Storage with StrictLogging
   class Configurations(tag: Tag) extends Table[(Long, String, Option[String])](tag, "configurations") {
     def * = (flowId, conf, state)
 
-    def flowId = column[Long]("flowId", O.PrimaryKey)
+    def flowId = column[Long]("tapId", O.PrimaryKey)
 
     def conf = column[String]("conf")
 
