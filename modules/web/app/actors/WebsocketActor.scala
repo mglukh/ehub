@@ -16,6 +16,8 @@
 
 package actors
 
+import javax.security.auth.Subject
+
 import akka.actor.{Actor, ActorRef, Props}
 import common.actors.{ActorWithClusterAwareness, ActorWithComposableBehavior}
 import hq._
@@ -43,14 +45,14 @@ class WebsocketActor(out: ActorRef)
   override def commonBehavior(): Actor.Receive = clientMessages orElse serverMessages orElse super.commonBehavior()
 
   def serverMessages: Actor.Receive = {
-    case Update(Subject(address, subj, topic), data, _) =>
-      path2alias.get(address + "|" + subj + "|" + topic) foreach { alias =>
+    case Update(RemoteComponentKey(address, ComponentKey(route, TopicKey(topic))), data, _) =>
+      path2alias.get(address + "|" + route + "|" + topic) foreach { alias =>
         val value: String = "U" + alias + "|" + data.toString()
         out ! value
       }
 
-    case Stale(Subject(address, subj, topic)) =>
-      path2alias.get(address + "|" + subj + "|" + topic) foreach { alias =>
+    case Stale(RemoteComponentKey(address, ComponentKey(route, TopicKey(topic)))) =>
+      path2alias.get(address + "|" + route + "|" + topic) foreach { alias =>
         val value: String = "D" + alias + "|"
         out ! value
       }
@@ -84,7 +86,7 @@ class WebsocketActor(out: ActorRef)
   def processClientRequest(msgType: Char, x: String) = {
     x.split('|') match {
       case Array(address, route, topic) =>
-        val subj = Subject(address, route, topic)
+        val subj = RemoteComponentKey(address, ComponentKey(route, TopicKey(topic)))
         val msg = msgType match {
           case 'S' => Some(Subscribe(subj))
           case 'U' => Some(Unsubscribe(subj))
@@ -94,7 +96,7 @@ class WebsocketActor(out: ActorRef)
         }
         msg foreach (MessageRouterActor.path ! _)
       case Array(address, route, topic, payload) =>
-        val subj = Subject(address, route, topic)
+        val subj = RemoteComponentKey(address, ComponentKey(route, TopicKey(topic)))
         val msg = msgType match {
           case 'C' => Some(Command(subj, Json.parse(payload).asOpt[JsValue]))
           case _ =>

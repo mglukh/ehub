@@ -27,9 +27,6 @@ import play.api.libs.json.{JsArray, JsValue, Json}
 import scala.concurrent.duration.DurationLong
 import scala.util.{Failure, Success}
 
-/**
- * Created by maks on 5/11/2014.
- */
 object AgentProxyActor {
   def start(id: String, ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(id, ref), id)
 
@@ -40,10 +37,13 @@ case class TapAvailable(id: String)
 
 
 class AgentProxyActor(id: String, ref: ActorRef) extends PipelineWithStatesActor with ActorWithSubscribers {
+
   val route = "agent/" + id
-  val AGENT_X_INFO = Subject(route, "info")
-  val AGENT_X_TAPS = Subject(route, "taps")
-  val AGENT_X_ADD_TAP = Subject(route, "addTap")
+
+  val _info = "info"
+  val _taps = "taps"
+  val _addTap = "addTap"
+
 
 
   private var info: Option[JsValue] = None

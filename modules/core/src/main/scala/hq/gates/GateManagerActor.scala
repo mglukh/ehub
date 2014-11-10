@@ -17,7 +17,7 @@
 package hq.gates
 
 import akka.actor._
-import common.actors.{ActorWithComposableBehavior, ActorWithSubscribers}
+import common.actors.{ActorWithSubscribersToRoute, ActorWithComposableBehavior, ActorWithSubscribers}
 import hq._
 import hq.routing.MessageRouterActor
 import play.api.libs.json.{JsValue, Json}
@@ -34,9 +34,7 @@ object GateManagerActor {
 case class GateAvailable(id: String)
 
 class GateManagerActor extends ActorWithComposableBehavior
-with ActorWithSubscribers {
-
-  val GATES_LIST = Subject("gates", "list")
+with ActorWithSubscribersToRoute {
 
   var gates: Map[String, ActorRef] = Map()
 
@@ -50,8 +48,8 @@ with ActorWithSubscribers {
 
   def list = Some(Json.toJson(gates.keys.map { x => Json.obj("id" -> x)}.toArray))
 
-  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject match {
-    case GATES_LIST => updateTo(subject, ref, list)
+  override def processSubscribeRequest(ref: ActorRef, subject: Subject) = subject.topic match {
+    case "list" => updateTo(subject, ref, list)
   }
 
 
@@ -70,12 +68,12 @@ with ActorWithSubscribers {
   def handler: Receive = {
     case GateAvailable(route) =>
       gates = gates + (route -> sender())
-      updateToAll(GATES_LIST, list)
+      topicUpdate("list", list)
     case Terminated(ref) =>
       gates = gates.filter {
         case (route,otherRef) => otherRef != ref
       }
-      updateToAll(GATES_LIST, list)
+      topicUpdate("list", list)
   }
 
 

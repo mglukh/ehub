@@ -40,11 +40,7 @@ case class NodeInfo(state: NodeState, address: Address, roles: Set[String]) exte
 case class ClusterActorId(address: String, id: String)
 
 
-trait ActorWithClusterAwareness extends ActorWithComposableBehavior {
-
-
-  implicit val cluster: Cluster
-  val myAddress = cluster.selfAddress.toString
+trait ActorWithClusterAwareness extends ActorWithCluster {
 
   var nodes: List[NodeInfo] = List[NodeInfo]()
   private var refCache: Map[ClusterActorId, ActorRef] = new HashMap[ClusterActorId, ActorRef]()

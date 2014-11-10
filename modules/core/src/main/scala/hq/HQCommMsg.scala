@@ -19,16 +19,19 @@ package hq
 import akka.actor.ActorRef
 import play.api.libs.json.JsValue
 
-trait HQCommMsg {
-  val subj: Subject
+trait HQCommMsg[T <: SubscriptionKey] {
+  val key: T
 }
 
-case class Subject(address: String, route: String, topic: String)
+sealed trait SubscriptionKey
+case class TopicKey(topic: String) extends SubscriptionKey
+case class ComponentKey(route: String, topic: TopicKey) extends SubscriptionKey
+case class RemoteComponentKey(address: String, component: ComponentKey) extends SubscriptionKey
 
-case class Subscribe(subj: Subject) extends HQCommMsg
-case class Unsubscribe(subj: Subject) extends HQCommMsg
-case class Command(subj: Subject, data: Option[JsValue] = None) extends HQCommMsg
-case class Update(subj: Subject, data: JsValue, canBeCached: Boolean = true) extends HQCommMsg
-case class Stale(subj: Subject) extends HQCommMsg
+case class Subscribe[T <: SubscriptionKey](key: T) extends HQCommMsg[T]
+case class Unsubscribe[T <: SubscriptionKey](key: T) extends HQCommMsg[T]
+case class Command[T <: SubscriptionKey](key: T, data: Option[JsValue] = None) extends HQCommMsg[T]
+case class Update[T <: SubscriptionKey](key: T, data: JsValue, canBeCached: Boolean = true) extends HQCommMsg[T]
+case class Stale[T <: SubscriptionKey](key: T) extends HQCommMsg[T]
 
 case class RegisterComponent(route: String, ref: ActorRef)

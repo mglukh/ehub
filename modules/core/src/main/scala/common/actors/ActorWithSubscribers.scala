@@ -23,30 +23,30 @@ import play.api.libs.json.JsValue
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
-trait ActorWithSubscribers extends ActorWithComposableBehavior {
+trait ActorWithSubscribers[T <: SubscriptionKey] extends ActorWithComposableBehavior {
 
-  private val subscribers : mutable.Map[Subject, Set[ActorRef]] = new mutable.HashMap[Subject, Set[ActorRef]]()
+  private val subscribers : mutable.Map[T, Set[ActorRef]] = new mutable.HashMap[T, Set[ActorRef]]()
 
   private var watchedSubscribers : mutable.Set[ActorRef] = mutable.HashSet()
 
   override def commonBehavior(): Actor.Receive = handleMessages orElse super.commonBehavior()
 
-  def firstSubscriber(subject: Subject) = {}
-  def lastSubscriberGone(subject: Subject) = {}
-  def processSubscribeRequest(ref: ActorRef, subject: Subject) = {}
-  def processUnsubscribeRequest(ref: ActorRef, subject: Subject) = {}
-  def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = {}
+  def firstSubscriber(subject: T) = {}
+  def lastSubscriberGone(subject: T) = {}
+  def processSubscribeRequest(ref: ActorRef, subject: T) = {}
+  def processUnsubscribeRequest(ref: ActorRef, subject: T) = {}
+  def processCommand(ref: ActorRef, subject: T, maybeData: Option[JsValue]) = {}
 
-  def collectSubjects(f: Subject => Boolean) = subscribers.collect {
+  def collectTs(f: T => Boolean) = subscribers.collect {
     case (sub, set) if f(sub) => sub
   }
-  def collectSubscribers(f: Subject => Boolean) = subscribers.filter {
+  def collectSubscribers(f: T => Boolean) = subscribers.filter {
     case (sub, set) => f(sub)
   }
-  def subscribersFor(subj: Subject) = subscribers.get(subj)
-  def updateTo(subj: Subject, ref: ActorRef, data: Option[JsValue]) =
+  def subscribersFor(subj: T) = subscribers.get(subj)
+  def updateTo(subj: T, ref: ActorRef, data: Option[JsValue]) =
     data foreach(ref ! Update(subj, _, canBeCached = true))
-  def updateToAll(subj: Subject, data: Option[JsValue]) =
+  def updateToAll(subj: T, data: Option[JsValue]) =
     subscribersFor(subj).foreach { set =>
       set.foreach { ref =>
         logger.debug(s"update on $subj -> $ref")
@@ -54,7 +54,7 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
       }
     }
 
-  def addSubscriber(ref: ActorRef, subject: Subject): Unit = {
+  def addSubscriber[X <: SubscriptionKey](ref: ActorRef, subject: T): Unit = {
     logger.info(s"New subscriber for $subject at $ref")
 
     if (!watchedSubscribers.contains(ref)) {
@@ -74,7 +74,7 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
     processSubscribeRequest(ref, subject)
   }
 
-  def removeSubscriber(ref: ActorRef, subject: Subject): Unit = {
+  def removeSubscriber(ref: ActorRef, subject: T): Unit = {
     val refs: Set[ActorRef] = subscribers.getOrElse(subject, new HashSet[ActorRef]()) - ref
     if (refs.isEmpty) {
       subscribers -= subject
