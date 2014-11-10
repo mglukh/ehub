@@ -1,3 +1,19 @@
+/*
+ * Copyright 2014 Intelix Pty Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package hq.gates
 
 import akka.actor._
@@ -5,7 +21,7 @@ import common.{BecomeActive, BecomePassive}
 import common.actors.{ActorWithSubscribers, PipelineWithStatesActor}
 import hq._
 import hq.routing.MessageRouterActor
-import play.api.libs.json.Json
+import play.api.libs.json.{JsValue, Json}
 
 object GateActor {
   def props(id: String) = Props(new GateActor(id))
@@ -31,7 +47,7 @@ class GateActor(id: String) extends PipelineWithStatesActor with ActorWithSubscr
     context.parent ! GateAvailable(route)
   }
 
-  override def commonBehavior(): Actor.Receive = commandHandler orElse super.commonBehavior()
+  override def commonBehavior(): Actor.Receive = super.commonBehavior()
 
   override def becomeActive(): Unit = {
     active = true
@@ -56,9 +72,8 @@ class GateActor(id: String) extends PipelineWithStatesActor with ActorWithSubscr
   }
 
 
-
-  private def commandHandler : Receive = {
-    case Command(GATE_X_STOP, _) =>
+  override def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = subject.topic match {
+    case "stop" =>
       lastRequestedState match {
         case Some(Active()) =>
           logger.info("Stopping the gate")
@@ -66,7 +81,7 @@ class GateActor(id: String) extends PipelineWithStatesActor with ActorWithSubscr
         case _ =>
           logger.info("Already stopped")
       }
-    case Command(GATE_X_START, _) =>
+    case "start" =>
       lastRequestedState match {
         case Some(Active()) =>
           logger.info("Already started")
@@ -74,9 +89,8 @@ class GateActor(id: String) extends PipelineWithStatesActor with ActorWithSubscr
           logger.info("Starting the gate")
           self ! BecomeActive()
       }
-    case Command(GATE_X_KILL, _) =>
+    case "kill" =>
       self ! PoisonPill
   }
-
 
 }

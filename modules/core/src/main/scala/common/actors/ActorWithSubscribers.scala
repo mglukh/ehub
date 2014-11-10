@@ -1,7 +1,23 @@
+/*
+ * Copyright 2014 Intelix Pty Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package common.actors
 
 import akka.actor.{Actor, ActorRef, Terminated}
-import hq.{Subject, Subscribe, Unsubscribe, Update}
+import hq._
 import play.api.libs.json.JsValue
 
 import scala.collection.immutable.HashSet
@@ -19,6 +35,7 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
   def lastSubscriberGone(subject: Subject) = {}
   def processSubscribeRequest(ref: ActorRef, subject: Subject) = {}
   def processUnsubscribeRequest(ref: ActorRef, subject: Subject) = {}
+  def processCommand(ref: ActorRef, subject: Subject, maybeData: Option[JsValue]) = {}
 
   def collectSubjects(f: Subject => Boolean) = subscribers.collect {
     case (sub, set) if f(sub) => sub
@@ -80,6 +97,8 @@ trait ActorWithSubscribers extends ActorWithComposableBehavior {
       addSubscriber(sender(), subj)
     case Unsubscribe(subj) =>
       removeSubscriber(sender(), subj)
+    case Command(subj, data) =>
+      processCommand(sender(), subj, data)
     case Terminated(ref) if watchedSubscribers contains ref =>
       removeSubscriber(ref)
   }

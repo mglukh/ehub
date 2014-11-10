@@ -1,12 +1,28 @@
+/*
+ * Copyright 2014 Intelix Pty Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package agent.controller
 
-import agent.controller.flow.{FlowActor, FlowConfigUpdate, StartFlowInstance, SuspendFlowInstance}
+import agent.controller.flow.{TapActor, TapConfigUpdate, StartFlowInstance, SuspendFlowInstance}
 import agent.controller.storage._
 import agent.shared._
 import akka.actor.{ActorRef, Props}
 import akka.stream.scaladsl2.FlowMaterializer
 import com.typesafe.config.Config
-import common.actors.{ActorWithComposableBehavior, ReconnectingActor}
+import common.actors.{ActorObjWithConfig, ActorObj, ActorWithComposableBehavior, ReconnectingActor}
 import net.ceedubs.ficus.Ficus._
 import play.api.libs.json.{JsValue, Json}
 
@@ -15,8 +31,9 @@ import scala.collection.mutable
 /**
  * Created by maks on 18/09/14.
  */
-object AgentControllerActor {
-  def props(implicit config: Config) = Props(new AgentControllerActor())
+object AgentControllerActor extends ActorObjWithConfig {
+  override def id: String = "controller"
+  override def props(implicit config: Config) = Props(new AgentControllerActor())
 }
 
 class AgentControllerActor(implicit config: Config)
@@ -25,22 +42,29 @@ class AgentControllerActor(implicit config: Config)
 
   implicit val mat = FlowMaterializer()
   implicit val system = context.system
-  val flowActors: mutable.Map[Long, ActorRef] = mutable.HashMap()
-  var storage: ActorRef = context.actorOf(ConfigStorageActor.props, "storage")
+
+  val tapActors: mutable.Map[Long, ActorRef] = mutable.HashMap()
+  var storage = ConfigStorageActor.path
   var commProxy: Option[ActorRef] = None
 
   override def commonBehavior(): Receive = commonMessageHandler orElse super.commonBehavior()
 
   private def commonMessageHandler: Receive = handleReconnectMessages orElse {
     case ConnectedState() =>
-      remoteActorRef.foreach(_ ! Handshake(config.as[String]("agent.name")))
+      remoteActorRef.foreach(_ ! Handshake(self, config.as[String]("agent.name")))
     case DisconnectedState() =>
       commProxy = None
       initiateReconnect()
     case CommunicationProxyRef(ref) =>
       commProxy = Some(ref)
-      sendToHQ(info)
-      sendToHQ(snapshot)
+      sendToHQAll()
+  }
+
+  private def nextAvailableId = tapActors.keys.max + 1
+
+  private def sendToHQAll() = {
+    sendToHQ(info)
+    sendToHQ(snapshot)
   }
 
   private def sendToHQ(json: JsValue) = {
@@ -50,12 +74,21 @@ class AgentControllerActor(implicit config: Config)
     }
   }
 
-  private def snapshot = Json.obj()
+  private def snapshot = Json.obj(
+    "taps" -> Json.toJson(
+      tapActors.keys.toArray.sorted.map { key => Json.obj(
+        "id" -> actorFriendlyId(key.toString),
+        "ref" -> tapActors.get(key).get.path.toString
+      )}
+    )
+  )
 
   private def info = Json.obj(
     "info" -> Json.obj(
       "name" -> config.as[String]("agent.name"),
-      "text" -> ("some random text from " + config.as[String]("agent.name")),
+      "description" -> config.as[String]("agent.description"),
+      "location" -> config.as[String]("agent.location"),
+      "address" -> context.self.path.address.toString,
       "state" -> "active"
     )
   )
@@ -72,44 +105,45 @@ class AgentControllerActor(implicit config: Config)
 
   private def handleInitialisationMessages: Receive = {
     case StoredConfigs(list) =>
-      logger.info("!>>> " + list)
+      logger.debug(s"Received list of tap from the storage: $list")
       list.foreach {
-        case StoredConfig(id, Some(FlowConfig(_, cfg, state))) =>
+        case StoredConfig(id, Some(TapConfig(_, cfg, state))) =>
           createActor(id, cfg, state)
         case StoredConfig(id, None) =>
-          logger.warn(s"No config defined for flow ID $id")
+          logger.warn(s"No config defined for tap ID $id")
       }
-      switchToCustomBehavior(handleFlowOpMessages, Some("with flows inititalised"))
+      switchToCustomBehavior(handleTapOpMessages, Some("existing taps loaded"))
   }
 
-  private def handleFlowOpMessages: Receive = {
+  private def handleTapOpMessages: Receive = {
 
-    case CreateFlow(cfg) =>
-      val flowId = (cfg \ "flowId").as[Long]
+    case CreateTap(cfg) =>
+      val tapId = (cfg \ "tapId").asOpt[Long] getOrElse nextAvailableId
       val cfgAsStr: String = Json.stringify(cfg)
-      logger.info("Creating flow " + flowId)
-      storage ! StoreConfig(FlowConfig(flowId, cfgAsStr, None))
-      createActor(flowId, cfgAsStr, None)
-    case StartFlow(id) =>
-      logger.info("Starting flow " + id)
-      flowActors.get(id).foreach(_ ! StartFlowInstance())
-    case StopFlow(id) =>
-      logger.info("Stopping flow " + id)
-      flowActors.get(id).foreach(_ ! SuspendFlowInstance())
-    case FlowConfigUpdate(id, state) =>
-      logger.info(s"Flow state update: id=$id state=$state")
-      storage ! StoreState(FlowState(id, Some(Json.stringify(state))))
+      logger.info("Creating tap " + tapId)
+      storage ! StoreConfig(TapConfig(tapId, cfgAsStr, None))
+      createActor(tapId, cfgAsStr, None)
+//    case OpenTap(id) =>
+//      logger.info("Starting flow " + id)
+//      tapActors.get(id).foreach(_ ! StartFlowInstance())
+//    case CloseTap(id) =>
+//      logger.info("Stopping flow " + id)
+//      tapActors.get(id).foreach(_ ! SuspendFlowInstance())
+    case TapConfigUpdate(id, state) =>
+      logger.info(s"Tap state update: id=$id state=$state")
+      storage ! StoreState(TapState(id, Some(Json.stringify(state))))
   }
 
-  def createActor(flowId: Long, config: String, maybeState: Option[String]): Unit = {
-    flowActors.get(flowId).foreach { actor =>
+  def createActor(tapId: Long, config: String, maybeState: Option[String]): Unit = {
+    val actorId = actorFriendlyId(tapId.toString)
+    tapActors.get(tapId).foreach { actor =>
       logger.info(s"Stopping $actor")
       context.stop(actor)
     }
-    logger.info(s"Creating a new actor for flow $flowId")
-    flowActors += (flowId -> context.actorOf(FlowActor.props(flowId, Json.parse(config), maybeState.map(Json.parse)), "flow" + flowId))
+    logger.info(s"Creating a new actor for tap $tapId")
+    tapActors += (tapId -> context.actorOf(TapActor.props(tapId, Json.parse(config), maybeState.map(Json.parse)), actorId))
+    sendToHQ(snapshot)
   }
 
-  //  private case class CreateFlowWith(flowId: Long, config: JsValue, state: Option[JsValue])
 
 }
