@@ -16,6 +16,8 @@
 
 package hq.routing
 
+import javax.security.auth.Subject
+
 import akka.actor._
 import akka.cluster.Cluster
 import common.actors._
