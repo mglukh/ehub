@@ -17,6 +17,7 @@
 package controllers.web
 
 import actors.WebsocketActor
+import akka.util.ByteString
 import models._
 import play.api._
 import play.api.mvc._
@@ -36,7 +37,6 @@ object Application extends Controller {
 
 	def socket = WebSocket.acceptWithActor[String, String] {
 		req => actor =>
-			println("!>>>>> ")
 			WebsocketActor.props(actor)
 	}
 

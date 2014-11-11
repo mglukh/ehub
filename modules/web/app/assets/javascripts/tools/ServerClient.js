@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-define(['jquery'], function (jquery) {
+define(['jquery', 'lz'], function (jquery, xxhash, lz) {
 
     var endpoint = "ws://localhost:9000/socket";
 
@@ -36,7 +36,8 @@ define(['jquery'], function (jquery) {
     var alias2key = {};
     var aliasCounter = 1;
 
-
+    var aggregationTimer = false;
+    var aggregatedMessage = false;
 
     function attemptConnection() {
         attemptsSoFar++;
@@ -83,12 +84,11 @@ define(['jquery'], function (jquery) {
             }
         };
 
-        sock.onmessage = function (e) {
-            console.debug("From Websocket: " + e.data);
+        function nextMsg(content) {
 
-            var type = e.data.substring(0,1);
+            var type = content.substring(0, 1);
 
-            var aliasAndData = e.data.substring(1).split('|');
+            var aliasAndData = content.substring(1).split('|');
 
             var path = alias2key[aliasAndData[0]];
             var payload = aliasAndData[1] ? JSON.parse(aliasAndData[1]) : false;
@@ -107,7 +107,15 @@ define(['jquery'], function (jquery) {
             listeners.forEach(function (next) {
                 next.onMessage(eventId, type, payload);
             });
+        }
 
+        sock.onmessage = function (e) {
+            var flag = e.data.substring(0, 1);
+            var data = e.data.substring(1);
+            var content = flag == 'z' ? LZString.decompressFromUTF16(data) : data;
+            console.debug("From Websocket: " + content);
+            var messages = content.split("~~");
+            messages.forEach(nextMsg);
         };
 
     }
@@ -127,12 +135,28 @@ define(['jquery'], function (jquery) {
 
                 key2alias[key] = aliasCounter;
                 alias2key[alias] = key;
-                sock.send('A' + alias + "|" + key);
+                var aliasMsg = 'A' + alias + "|" + key;
+                aggregatedMessage = aggregatedMessage ? aggregatedMessage + "~~" + aliasMsg : aliasMsg;
                 key = alias;
             } else {
                 key = key2alias[key];
             }
-            sock.send(type + key + "|" + (payload ? JSON.stringify(payload) : ""));
+
+            var msg = type + key + "|" + (payload ? JSON.stringify(payload) : "");
+            aggregatedMessage = aggregatedMessage ? aggregatedMessage + "~~" + msg : msg;
+            if (!aggregationTimer) {
+                aggregationTimer = setTimeout(function() {
+                    var msg = aggregatedMessage;
+                    aggregationTimer = false;
+                    aggregatedMessage = false;
+                    if (msg.length>100) {
+                        msg = "z" + LZString.compressToUTF16(msg);
+                    } else {
+                        msg = "f" + msg;
+                    }
+                    if (connected()) sock.send(msg);
+                }, 100);
+            }
             return true;
         } else {
             return false;

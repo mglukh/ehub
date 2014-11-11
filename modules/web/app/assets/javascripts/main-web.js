@@ -24,6 +24,7 @@
             react: "../lib/react/react-with-addons",
             bootstrap: "../lib/bootstrap/js/bootstrap",
 
+            lz: "/assets/javascripts/lz-string",
             subscriberMixin: "tools/AutoSubscribeMixin",
             sendOnlyMixin: "tools/SendOnlyMixin",
             wsclient: "tools/ServerClient"

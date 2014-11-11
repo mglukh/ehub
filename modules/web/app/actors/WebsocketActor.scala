@@ -17,12 +17,14 @@
 package actors
 
 import akka.actor.{Actor, ActorRef, Props}
-import common.actors.ActorWithComposableBehavior
+import com.diogoduailibe.lzstring4j.LZString
+import common.actors.{ActorWithComposableBehavior, ActorWithTicks}
 import hq._
 import hq.routing.MessageRouterActor
 import play.api.libs.json.{JsValue, Json}
 
 import scala.collection.mutable
+import scala.concurrent.duration.{DurationDouble, FiniteDuration}
 
 object WebsocketActor {
   def props(out: ActorRef) = Props(new WebsocketActor(out))
@@ -30,10 +32,15 @@ object WebsocketActor {
 
 
 class WebsocketActor(out: ActorRef)
-  extends ActorWithComposableBehavior {
+  extends ActorWithComposableBehavior
+  with ActorWithTicks {
+
 
   val alias2path: mutable.Map[String, String] = new mutable.HashMap[String, String]()
   val path2alias: mutable.Map[String, String] = new mutable.HashMap[String, String]()
+  var aggregator: mutable.Map[String, String] = new mutable.HashMap[String, String]()
+
+  override def tickInterval: FiniteDuration = 200.millis
 
   override def preStart(): Unit = {
     super.preStart()
@@ -44,26 +51,41 @@ class WebsocketActor(out: ActorRef)
 
   private def messageHandler: Actor.Receive = {
     case Update(sourceRef, subj, data, _) =>
-      path2alias get subj2path(subj) foreach (out ! buildClientMessage("U", _)(Json.stringify(data)))
+      path2alias get subj2path(subj) foreach { path => scheduleOut(path, buildClientMessage("U", path)(Json.stringify(data)))}
     case Stale(sourceRef, subj) =>
-      path2alias get subj2path(subj) foreach (out ! buildClientMessage("D", _)())
+      path2alias get subj2path(subj) foreach { path => scheduleOut(path, buildClientMessage("D", path)())}
 
     case payload: String =>
-      logger.debug(s"Received from Websocket: $payload")
 
-      val mtype = payload.head
-      val data = payload.tail
-
-      mtype match {
-        case 'A' => addOrReplaceAlias(data)
-        case _ => extractByAlias(data) foreach { str =>
-          extractSubjectAndPayload(str,
-            processRequestByType(mtype, _, _) foreach(MessageRouterActor.path ! _)
-          )}
+      val flag = payload.head
+      val d = flag match {
+        case 'z' => LZString.decompressFromUTF16(payload.tail)
+        case _ => payload.tail
       }
+
+      logger.debug(s"Received from Websocket: $d (${d.length}/${payload.length})")
+
+      d.split("~~").foreach { msgContents =>
+        val mtype = msgContents.head
+        val data = msgContents.tail
+
+        mtype match {
+          case 'A' => addOrReplaceAlias(data)
+          case _ => extractByAlias(data) foreach { str =>
+            extractSubjectAndPayload(str,
+              processRequestByType(mtype, _, _) foreach (MessageRouterActor.path ! _)
+            )
+          }
+        }
+      }
+
   }
 
-  private def buildClientMessage(mt: String, alias: String)(payload: String = "") = mt + alias + "|" + payload
+  private def scheduleOut(path: String, content: String) = aggregator += path -> content
+
+  private def buildClientMessage(mt: String, alias: String)(payload: String = "") = {
+    mt + alias + "|" + payload
+  }
 
 
   private def subj2path(subj: Any) = subj match {
@@ -114,6 +136,29 @@ class WebsocketActor(out: ActorRef)
       case _ => logger.warn(s"Invalid payload $str")
     }
     extract(str.split('|').toList)
+  }
+
+  override def processTick(): Unit = {
+    val str = aggregator.values.foldRight("") { (value, aggr) =>
+      if (aggr != "") {
+        aggr + "~~" + value
+      } else {
+        value
+      }
+    }
+    if (str.length > 0) {
+      var msg = ""
+      if (str.length>100) {
+        val comp = LZString.compressToUTF16(str)
+        if (comp.length<str.length) {
+          msg = "z"+comp
+        }
+      }
+      if (msg == "") msg = "f" + str
+      out ! msg
+      logger.info(s"Sent ${aggregator.size} messages, uncomp ${str.length} comp ${msg.length}")
+      aggregator.clear()
+    }
   }
 
 }
