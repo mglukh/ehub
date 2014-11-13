@@ -27,4 +27,4 @@ addSbtPlugin("com.typesafe.sbt" % "sbt-digest" % "1.0.0")
 
 addSbtPlugin("com.typesafe.sbt" % "sbt-gzip" % "1.0.0")
 
-addSbtPlugin("com.github.ddispaltro" % "sbt-reactjs" % "0.3.0")
+addSbtPlugin("com.github.ddispaltro" % "sbt-reactjs" % "0.4.0")
