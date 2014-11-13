@@ -23,6 +23,8 @@ define(['wsclient'], function (client) {
             this.setState(partialStateUpdate);
         },
         onStaleUpdate: function (key, data) {
+            var id = this.subscriptionConfig();
+            console.debug("Stale: "+data+" for " + key +" on " + id.route + "{" + id.topic + "}@" + id.address);
             var staleKey = key+"_stale";
             if (this.state[staleKey] != data) {
                 var partialStateUpdate = {};
@@ -43,7 +45,7 @@ define(['wsclient'], function (client) {
             }
         },
 
-        startSubscription: function () {
+        startListener: function () {
             var self = this;
             var id = this.subscriptionConfig();
 
@@ -86,7 +88,7 @@ define(['wsclient'], function (client) {
 
             console.debug("Initiated subscription for " + componentId());
         },
-        stopSubscription: function () {
+        stopListener: function () {
             if (this.handle) {
                 var id = this.subscriptionConfig();
 
@@ -94,18 +96,6 @@ define(['wsclient'], function (client) {
 
                 this.handle.stop();
                 this.handle = null;
-            }
-        },
-        componentDidMount: function () {
-            this.startSubscription();
-            if (this.onMount) {
-                this.onMount();
-            }
-        },
-        componentWillUnmount: function () {
-            this.stopSubscription();
-            if (this.onUnmount) {
-                this.onUnmount();
             }
         }
     };

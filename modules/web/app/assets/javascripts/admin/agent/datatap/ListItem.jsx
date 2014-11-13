@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -17,17 +15,19 @@
  */
 define([
         'react',
+        'coreMixin',
         'subscriberMixin',
         'admin/gate/StartStopButton',
         'admin/gate/DeleteButton'
     ],
     function (React,
+              coreMixin,
               subscriberMixin,
               StartStopButton,
               DeleteButton) {
 
         return React.createClass({
-            mixins: [subscriberMixin],
+            mixins: [coreMixin, subscriberMixin],
 
             subscriptionConfig: function () {
                 return {address: this.props.addr, route: this.props.id, topic: 'info', target: 'info'};
@@ -40,9 +40,9 @@ define([
                 return (
                     <div>
                     {this.state.info.name} {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
-                        <StartStopButton  addr={this.props.addr} state={this.state.info.state} route={this.props.id} />
+                        <StartStopButton {...this.props} state={this.state.info.state} route={this.props.id} />
                     :
-                        <DeleteButton  addr={this.props.addr} route={this.props.id} />
+                        <DeleteButton  {...this.props} route={this.props.id} />
                     </div>
                 );
             },

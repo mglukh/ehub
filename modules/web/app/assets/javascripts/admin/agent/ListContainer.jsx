@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,30 +13,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'admin/agent/List', 'admin/agent/datatap/ListContainer', 'admin/agent/datatap/AddNewForm'],
-    function (React, List, TapListContainer, AddNew) {
+define(['react', 'coreMixin', 'admin/agent/List', 'admin/agent/datatap/ListContainer', 'admin/agent/datatap/AddNewForm'],
+    function (React, coreMixin, List, TapListContainer, AddNew) {
 
     return React.createClass({
+        mixins: [coreMixin],
 
         getInitialState: function () {
             return { selection: false }
         },
 
-        handleSelection: function(id) {
-            this.setState({selection: id});
+        handleSelection: function(evt) {
+            this.setState({selection: evt.detail.id});
+        },
+        handleTapUnavailable: function(evt) {
+            if (this.state.selection == evt.detail.id) {
+                this.setState({selection: false});
+            }
+        },
+
+        onMount: function() {
+            this.addEventListener("tapSelected", this.handleSelection);
+            this.addEventListener("tapUnavailable", this.handleTapUnavailable);
+        },
+        onUnmount: function() {
+            this.removeEventListener("tapSelected", this.handleSelection);
+            this.removeEventListener("tapUnavailable", this.handleTapUnavailable);
         },
 
         render: function () {
 
             var selection = this.state.selection
                 ? <div><h3>Selected:</h3><TapListContainer addr={this.props.addr} id={this.state.selection} />
-                    <div><AddNew addr={this.props.addr} id={this.state.selection} /></div>
+                    <div><AddNew {...this.props}  id={this.state.selection} /></div>
                     </div>
                 : <div>Please select agent</div>
 
             return (
                 <div>
-                    <List  addr={this.props.addr} handleSelection={this.handleSelection} />
+                    <List  {...this.props} />
                     {selection}
                 </div>
             )

@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'admin/gate/List', 'admin/gate/AddButton'],
-    function (React, List, AddButton) {
+define(['react', 'coreMixin', 'admin/gate/List', 'admin/gate/AddButton'],
+    function (React, coreMixin, List, AddButton) {
 
     return React.createClass({
+        mixins: [coreMixin],
 
         getInitialState: function () {
             return {}
@@ -27,8 +26,8 @@ define(['react', 'admin/gate/List', 'admin/gate/AddButton'],
         render: function () {
             return (
                 <div>
-                    <AddButton addr={this.props.addr} />
-                    <List addr={this.props.addr} />
+                    <AddButton {...this.props}  />
+                    <List {...this.props}  />
                 </div>
             )
         }

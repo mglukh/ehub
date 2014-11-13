@@ -52,19 +52,6 @@ define(['wsclient'], function(client) {
             if (this.handle) {
                 this.handle.stop();
             }
-        },
-        componentDidMount: function() {
-            console.debug("!>>>> mounted");
-            this.startListener();
-            if (this.onMount) {
-                this.onMount();
-            }
-        },
-        componentWillUnmount: function() {
-            this.stopListener();
-            if (this.onUnmount) {
-                this.onUnmount();
-            }
         }
     };
 

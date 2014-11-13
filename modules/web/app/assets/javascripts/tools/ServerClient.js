@@ -18,6 +18,8 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
 
     var endpoint = "ws://localhost:9000/socket";
 
+    var opSplitCode = String.fromCharCode(1);
+    var msgSplitCode = String.fromCharCode(2);
 
     var reconnectInterval = 3000;
     var connectionEstablishTimeout = 5000;
@@ -36,8 +38,12 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
     var alias2key = {};
     var aliasCounter = 1;
 
+    var location2locationAlias = {};
+    var locationAlias2location = {};
+    var locationAliasCounter = 1;
+
     var aggregationTimer = false;
-    var aggregatedMessage = false;
+    var aggregatedMessage = [];
 
     function attemptConnection() {
         attemptsSoFar++;
@@ -88,21 +94,21 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
 
             var type = content.substring(0, 1);
 
-            var aliasAndData = content.substring(1).split('|');
+            var aliasAndData = content.substring(1).split(opSplitCode);
 
             var path = alias2key[aliasAndData[0]];
             var payload = aliasAndData[1] ? JSON.parse(aliasAndData[1]) : false;
 
             console.debug("Alias conversion: " + aliasAndData[0] + " -> " + path);
 
-            var segments = path.split('|');
-            var address = segments[0];
+            var segments = path.split(opSplitCode);
+            var address = locationAlias2location[segments[0]] ? locationAlias2location[segments[0]] : segments[0];
             var route = segments[1];
             var topic = segments[2];
 
             console.debug("From Websocket: " + type + " : " + address + " : " + route + " : " + topic + " : " + payload);
 
-            var eventId = address + "|" + route + "|" + topic;
+            var eventId = address + opSplitCode + route + opSplitCode + topic;
 
             listeners.forEach(function (next) {
                 next.onMessage(eventId, type, payload);
@@ -114,7 +120,7 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
             var data = e.data.substring(1);
             var content = flag == 'z' ? LZString.decompressFromUTF16(data) : data;
             console.debug("From Websocket: " + content);
-            var messages = content.split("~~");
+            var messages = content.split(msgSplitCode);
             messages.forEach(nextMsg);
         };
 
@@ -125,31 +131,48 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
     }
 
 
+    function scheduleSend(msg) {
+        if ($.inArray(msg, aggregatedMessage) == -1) {
+            aggregatedMessage.push(msg);
+        }
+    }
+
     function sendToServer(type, address, route, topic, payload) {
         if (connected()) {
-            var key = address + "|" + route + "|" + topic;
+
+            var locAlias = false;
+            if (!location2locationAlias[address]) {
+                locationAliasCounter++;
+                locAlias = locationAliasCounter.toString(32);
+                location2locationAlias[address] = locAlias;
+                locationAlias2location[locAlias] = address;
+                scheduleSend('B' + locAlias + opSplitCode + address);
+            } else {
+                locAlias = location2locationAlias[address];
+            }
+
+            var key = locAlias + opSplitCode + route + opSplitCode + topic;
             if (!key2alias[key]) {
                 aliasCounter++;
 
                 var alias = aliasCounter.toString(32);
 
-                key2alias[key] = aliasCounter;
+                key2alias[key] = alias;
                 alias2key[alias] = key;
-                var aliasMsg = 'A' + alias + "|" + key;
-                aggregatedMessage = aggregatedMessage ? aggregatedMessage + "~~" + aliasMsg : aliasMsg;
+                scheduleSend('A' + alias + opSplitCode + key);
                 key = alias;
             } else {
                 key = key2alias[key];
             }
 
-            var msg = type + key + "|" + (payload ? JSON.stringify(payload) : "");
-            aggregatedMessage = aggregatedMessage ? aggregatedMessage + "~~" + msg : msg;
+            scheduleSend(type + key + opSplitCode + (payload ? JSON.stringify(payload) : ""));
+
             if (!aggregationTimer) {
-                aggregationTimer = setTimeout(function() {
-                    var msg = aggregatedMessage;
+                aggregationTimer = setTimeout(function () {
+                    var msg = aggregatedMessage.join(msgSplitCode);
                     aggregationTimer = false;
-                    aggregatedMessage = false;
-                    if (msg.length>100) {
+                    aggregatedMessage = [];
+                    if (msg.length > 100) {
                         msg = "z" + LZString.compressToUTF16(msg);
                     } else {
                         msg = "f" + msg;
@@ -199,14 +222,14 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
             function subscribeFunc(address, route, topic, callback) {
                 if (sendToServer("S", address, route, topic, false)) {
                     console.log("Registered interest: {" + route + "}" + topic);
-                    messageHandlers[address + "|" + route + "|" + topic] = callback;
+                    messageHandlers[address + opSplitCode + route + opSplitCode + topic] = callback;
                 }
             }
 
             function unsubscribeFunc(address, route, topic, callback) {
                 if (sendToServer("U", address, route, topic, false)) {
                     console.log("Unregistered interest: {" + route + "}" + topic);
-                    messageHandlers[address + "|" + route + "|" + topic] = null;
+                    messageHandlers[address + opSplitCode + route + opSplitCode + topic] = null;
                 }
             }
 

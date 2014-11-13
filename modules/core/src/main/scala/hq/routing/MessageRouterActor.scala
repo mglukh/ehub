@@ -154,10 +154,17 @@ class MessageRouterActor(implicit val cluster: Cluster)
 
   private def handler: Receive = {
     case Update(_, subj, data, cacheable) => publishToClients(subj, Update(self, _, data, cacheable))
+    case Stale(_, subj) => publishToClients(subj, Stale(self, _))
     case RegisterComponent(component, ref) => register(ref, component)
     case Terminated(ref) if isProviderRef(ref) =>
       staticRoutes = staticRoutes.map {
-        case (component, state) if ref == state.ref => component -> ProviderState(ref, active = false)
+        case (component, state) if ref == state.ref =>
+          collectSubjects { subj =>
+            subj.localSubj.component == component && myNodeIsTarget(subj)
+          } foreach { subj =>
+            publishToClients(subj, Stale(self, _))
+          }
+          component -> ProviderState(ref, active = false)
         case (component, state) => component -> state
       }
       scheduleRemoval(ref)

@@ -16,7 +16,10 @@
 
 package hq.gates
 
+import agent.flavors.files.{Cursor, ProducedMessage}
+import agent.shared.{Acknowledge, MessageWithAttachments, Acknowledgeable}
 import akka.actor._
+import akka.util.ByteString
 import common.actors.{PipelineWithStatesActor, SingleComponentActor}
 import common.{BecomeActive, BecomePassive}
 import hq._
@@ -41,7 +44,7 @@ class GateActor(id: String)
     super.preStart()
   }
 
-  override def commonBehavior: Actor.Receive = super.commonBehavior
+  override def commonBehavior: Actor.Receive = messageHandler orElse super.commonBehavior
 
   override def becomeActive(): Unit = {
     active = true
@@ -79,11 +82,22 @@ class GateActor(id: String)
         case Some(Active()) =>
           logger.info("Already started")
         case _ =>
-          logger.info("Starting the gate")
+          logger.info("Starting the gate " + self.toString())
           self ! BecomeActive()
       }
     case T_KILL =>
       self ! PoisonPill
+  }
+
+  private val messageHandler: Receive = {
+    case Acknowledgeable(msg, id) =>
+      sender ! Acknowledge(id)
+      msg match {
+        case ProducedMessage(MessageWithAttachments(msg: ByteString, attachments), c:Cursor) =>
+          logger.info(s"Received: ${msg.utf8String}, attachments: ${attachments}, cursor at $c")
+      }
+      Thread.sleep(3000)
+
   }
 
 }

@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react','admin/gate/ListContainer','admin/agent/ListContainer'],
-    function (React, GatesContainer, AgentsContainer) {
+define(['react', 'coreMixin', 'admin/gate/ListContainer','admin/agent/ListContainer'],
+    function (React, coreMixin, GatesContainer, AgentsContainer) {
 
     return React.createClass({
+        mixins: [coreMixin],
 
         getInitialState: function () {
             return {}
@@ -27,9 +26,9 @@ define(['react','admin/gate/ListContainer','admin/agent/ListContainer'],
         render: function () {
             return (
                 <div>
-                    <GatesContainer addr={this.props.addr} />
+                    <GatesContainer {...this.props} />
                     <hr/>
-                    <AgentsContainer addr={this.props.addr} />
+                    <AgentsContainer {...this.props} />
                 </div>
             )
         }

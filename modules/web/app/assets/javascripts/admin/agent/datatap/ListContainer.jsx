@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,19 +13,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'admin/agent/datatap/List'],
-    function (React, List) {
+define(['react', 'coreMixin', 'subscriberMixin', 'admin/agent/datatap/List'],
+    function (React, coreMixin, subscriberMixin, List) {
 
     return React.createClass({
+        mixins: [coreMixin, subscriberMixin],
 
         getInitialState: function () {
             return {}
         },
 
+
+        subscriptionConfig: function () {
+            return {address: this.props.addr, route: this.props.id, topic: 'info', target: 'info'};
+        },
+
+        componentWillUpdate: function(nextProps, nextState) {
+            if (!this.state.info_stale && nextState.info_stale) {
+                this.raiseEvent("tapUnavailable", {id: this.props.id});
+            }
+        },
+
+        onUnmount: function() {
+            console.debug("!>>>> hm1");
+            this.raiseEvent("tapUnavailable", {id: this.props.id});
+        },
+
+
         render: function () {
             return (
                 <div>
-                    <List addr={this.props.addr} id={this.props.id}/>
+                    <List {...this.props} id={this.props.id}/>
                 </div>
             )
         }

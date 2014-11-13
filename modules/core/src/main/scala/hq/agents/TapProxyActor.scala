@@ -21,7 +21,7 @@ import akka.actor._
 import akka.remote.DisassociatedEvent
 import common.actors.{PipelineWithStatesActor, SingleComponentActor}
 import hq.{ComponentKey, TopicKey}
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsArray, JsValue, Json}
 
 
 object TapProxyActor {
@@ -35,7 +35,7 @@ class TapProxyActor(val key: ComponentKey, ref: ActorRef)
   with SingleComponentActor {
 
 
-  private var info: Option[JsValue] = Some(Json.obj("id"->"Hello","name"->"haha")) // TODO
+  private var info: Option[JsValue] = None
 
   override def commonBehavior: Actor.Receive = commonMessageHandler orElse super.commonBehavior
 
@@ -61,6 +61,17 @@ class TapProxyActor(val key: ComponentKey, ref: ActorRef)
     case T_KILL => ref ! RemoveTap()
   }
 
+  private def process(json: JsValue) = {
+    (json \ "info").asOpt[JsValue] foreach processInfo
+  }
+
+  private def processInfo(json: JsValue) = {
+    info = Some(json)
+    logger.debug(s"Received agent info update: $info")
+    topicUpdate(T_INFO, info)
+  }
+
+
   private def commonMessageHandler: Receive = {
     case GenericJSONMessage(jsonString) =>
       Json.parse(jsonString).asOpt[JsValue] foreach process
@@ -70,15 +81,7 @@ class TapProxyActor(val key: ComponentKey, ref: ActorRef)
       }
   }
 
-  private def process(json: JsValue) = {
-    (json \ "info").asOpt[JsValue] foreach processInfo
-  }
 
-  private def processInfo(json: JsValue) = {
-    info = Some(json)
-    logger.debug(s"Received tap info update: $info")
-    topicUpdate(T_INFO, info)
-  }
 
 
 }

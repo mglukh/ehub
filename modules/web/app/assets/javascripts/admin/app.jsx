@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -17,6 +15,6 @@
  */
 require(['react','admin/NodeTabs'], function (React, Container) {
 
-    React.renderComponent(<Container />, document.getElementById('content'));
+    React.render(<Container />, document.getElementById('content'));
 
 });

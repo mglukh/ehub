@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'subscriberMixin', 'admin/agent/datatap/ListItem'], function (React, subscriberMixin, ListItem) {
+define(['react', 'coreMixin', 'subscriberMixin', 'admin/agent/datatap/ListItem'], function (React, coreMixin, subscriberMixin, ListItem) {
 
     return React.createClass({
-        mixins: [subscriberMixin],
+        mixins: [coreMixin, subscriberMixin],
 
         subscriptionConfig: function () {
             return {address: this.props.addr, route:this.props.id, topic:'taps', target: 'list'};
@@ -32,7 +30,7 @@ define(['react', 'subscriberMixin', 'admin/agent/datatap/ListItem'], function (R
             return (
                 <div>
                 {this.state.list.map(function (el) {
-                    return <ListItem addr={props.addr} key={el.id} id={el.id}/>;
+                    return <ListItem {...props} key={el.id} id={el.id}/>;
                     })}
                 </div>
             );

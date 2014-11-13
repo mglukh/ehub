@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -17,17 +15,19 @@
  */
 define([
         'react',
+        'coreMixin',
         'subscriberMixin',
         'admin/gate/StartStopButton',
         'admin/agent/datatap/ListContainer'
     ],
     function (React,
+              coreMixin,
               subscriberMixin,
               StartStopButton,
               TapListContainer) {
 
         return React.createClass({
-            mixins: [subscriberMixin],
+            mixins: [coreMixin, subscriberMixin],
 
             subscriptionConfig: function () {
                 return {address: this.props.addr, route: this.props.id, topic: 'info', target: 'info'};
@@ -37,14 +37,14 @@ define([
             },
 
             handleClick: function() {
-                this.props.handleSelection(this.props.id);
+                this.raiseEvent("tapSelected", {id: this.props.id});
             },
 
             renderData: function () {
                 return (
                     <div>
                     <a href="#" onClick={this.handleClick}>{this.state.info.name}</a> {this.state.info_stale ? "Stale" : "not stale"} : {this.state.info.text} :
-                        <StartStopButton addr={this.props.addr} state={this.state.info.state} route={this.props.id} />
+                        <StartStopButton {...this.props} state={this.state.info.state} route={this.props.id} />
                     </div>
                 );
             },

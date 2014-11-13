@@ -19,7 +19,7 @@ package agent.controller.flow
 import java.nio.charset.Charset
 
 import agent.flavors.files._
-import agent.shared.{CloseTap, OpenTap, MessageWithAttachments}
+import agent.shared._
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.stream.actor.{ActorPublisher, ActorSubscriber}
 import akka.stream.scaladsl2._
@@ -46,10 +46,13 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
   type Out = ProducedMessage[MessageWithAttachments[ByteString], Cursor]
 
   private var flow: Option[FlowInstance] = None
+  var commProxy: Option[ActorRef] = None
 
   case class FlowInstance(flow: MaterializedFlow, source: ActorRef, sink: ActorRef)
 
   private var cursor2config: Option[Cursor => Option[JsValue]] = None
+
+  var active = false
 
   private def createFlowFromConfig(): Unit = {
 
@@ -182,6 +185,8 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
       v.sink ! BecomeActive()
       v.source ! BecomeActive()
     }
+    active = true
+    sendToHQAll()
   }
 
   private def stopFlow(): Unit = {
@@ -189,7 +194,11 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
       v.source ! BecomePassive()
       v.sink ! BecomePassive()
     }
+    active = false
+    sendToHQAll()
   }
+
+  private def info: JsValue = Json.obj("info" -> Json.obj("id"->"Test","name"->"temp name", "state"->(if (active) "active" else "passive"))) // TODO
 
 
   override def commonBehavior: Receive = super.commonBehavior orElse {
@@ -199,6 +208,21 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
           func <- cursor2config;
           config <- func(c)
         ) context.parent ! TapConfigUpdate(flowId, config)
+    }
+    case CommunicationProxyRef(ref) =>
+      commProxy = Some(ref)
+      sendToHQAll()
+  }
+
+  private def sendToHQAll() = {
+    sendToHQ(info)
+//    sendToHQ(snapshot)
+  }
+
+  private def sendToHQ(json: JsValue) = {
+    commProxy foreach { actor =>
+      logger.debug(s"$json -> $actor")
+      actor ! GenericJSONMessage(Json.stringify(json))
     }
   }
 

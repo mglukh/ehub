@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'subscriberMixin', 'admin/AdminContainer'], function (React, subscriberMixin, Container) {
+define(['react', 'coreMixin', 'subscriberMixin', 'admin/AdminContainer'], function (React, coreMixin, subscriberMixin, Container) {
 
     return React.createClass({
-        mixins: [subscriberMixin],
+        mixins: [coreMixin, subscriberMixin],
 
         subscriptionConfig: function () {
             return {address:'akka.tcp://application@localhost:2552', route:'cluster', topic:'nodes', target: 'nodes'};

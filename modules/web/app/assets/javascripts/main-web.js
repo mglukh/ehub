@@ -25,6 +25,7 @@
             bootstrap: "../lib/bootstrap/js/bootstrap",
 
             lz: "/assets/javascripts/lz-string",
+            coreMixin: "tools/CoreMixin",
             subscriberMixin: "tools/AutoSubscribeMixin",
             sendOnlyMixin: "tools/SendOnlyMixin",
             wsclient: "tools/ServerClient"

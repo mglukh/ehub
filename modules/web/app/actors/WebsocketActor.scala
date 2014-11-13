@@ -35,9 +35,15 @@ class WebsocketActor(out: ActorRef)
   extends ActorWithComposableBehavior
   with ActorWithTicks {
 
+  val opSplitChar: Char = 1.toChar
+  val msgSplitChar: Char = 2.toChar
 
   val alias2path: mutable.Map[String, String] = new mutable.HashMap[String, String]()
   val path2alias: mutable.Map[String, String] = new mutable.HashMap[String, String]()
+
+  val alias2location: mutable.Map[String, String] = new mutable.HashMap[String, String]()
+  val location2alias: mutable.Map[String, String] = new mutable.HashMap[String, String]()
+
   var aggregator: mutable.Map[String, String] = new mutable.HashMap[String, String]()
 
   override def tickInterval: FiniteDuration = 200.millis
@@ -65,12 +71,14 @@ class WebsocketActor(out: ActorRef)
 
       logger.debug(s"Received from Websocket: $d (${d.length}/${payload.length})")
 
-      d.split("~~").foreach { msgContents =>
+
+      d.split(msgSplitChar).foreach { msgContents =>
         val mtype = msgContents.head
         val data = msgContents.tail
 
         mtype match {
           case 'A' => addOrReplaceAlias(data)
+          case 'B' => addOrReplaceLocationAlias(data)
           case _ => extractByAlias(data) foreach { str =>
             extractSubjectAndPayload(str,
               processRequestByType(mtype, _, _) foreach (MessageRouterActor.path ! _)
@@ -84,21 +92,21 @@ class WebsocketActor(out: ActorRef)
   private def scheduleOut(path: String, content: String) = aggregator += path -> content
 
   private def buildClientMessage(mt: String, alias: String)(payload: String = "") = {
-    mt + alias + "|" + payload
+    mt + alias + opSplitChar + payload
   }
 
 
   private def subj2path(subj: Any) = subj match {
-    case RemoteSubj(addr, LocalSubj(ComponentKey(compKey), TopicKey(topicKey))) => segments2path(addr, compKey, topicKey)
+    case RemoteSubj(addr, LocalSubj(ComponentKey(compKey), TopicKey(topicKey))) => segments2path(location2alias.getOrElse(addr, addr), compKey, topicKey)
     case LocalSubj(ComponentKey(compKey), TopicKey(topicKey)) => segments2path("_", compKey, topicKey)
     case _ => "invalid"
   }
 
-  private def segments2path(addr: String, component: String, topic: String) = addr + "|" + component + "|" + topic
+  private def segments2path(addr: String, component: String, topic: String) = addr + opSplitChar + component + opSplitChar + topic
 
   private def addOrReplaceAlias(value: String) = {
 
-    val idx: Int = value.indexOf('|')
+    val idx: Int = value.indexOf(opSplitChar)
 
     val al = value.substring(0, idx)
     val path = value.substring(idx + 1)
@@ -106,6 +114,18 @@ class WebsocketActor(out: ActorRef)
     logger.info(s"Alias $al->$path")
     alias2path += al -> path
     path2alias += path -> al
+  }
+
+  private def addOrReplaceLocationAlias(value: String) = {
+
+    val idx: Int = value.indexOf(opSplitChar)
+
+    val al = value.substring(0, idx)
+    val path = value.substring(idx + 1)
+
+    logger.info(s"Location alias $al->$path")
+    alias2location += al -> path
+    location2alias += path -> al
   }
 
   private def processRequestByType(msgType: Char, subj: Subj, payload: Option[JsValue]) = msgType match {
@@ -118,7 +138,7 @@ class WebsocketActor(out: ActorRef)
   }
 
   private def extractByAlias(value: String): Option[String] = {
-    val idx: Int = value.indexOf('|')
+    val idx: Int = value.indexOf(opSplitChar)
     val al = value.substring(0, idx)
     val path = value.substring(idx)
 
@@ -132,16 +152,18 @@ class WebsocketActor(out: ActorRef)
     }
     def extract(list: List[String]) = list match {
       case "_" :: comp :: topic :: tail => f(LocalSubj(ComponentKey(comp), TopicKey(topic)), extractPayload(tail))
-      case addr :: comp :: topic :: tail => f(RemoteSubj(addr, LocalSubj(ComponentKey(comp), TopicKey(topic))), extractPayload(tail))
+      case addr :: comp :: topic :: tail => alias2location.get(addr).foreach { loc =>
+        f(RemoteSubj(loc, LocalSubj(ComponentKey(comp), TopicKey(topic))), extractPayload(tail))
+      }
       case _ => logger.warn(s"Invalid payload $str")
     }
-    extract(str.split('|').toList)
+    extract(str.split(opSplitChar).toList)
   }
 
   override def processTick(): Unit = {
     val str = aggregator.values.foldRight("") { (value, aggr) =>
       if (aggr != "") {
-        aggr + "~~" + value
+        aggr + msgSplitChar + value
       } else {
         value
       }

@@ -1,5 +1,3 @@
-/** @jsx React.DOM */
-
 /*
  * Copyright 2014 Intelix Pty Ltd
  *
@@ -15,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'sendOnlyMixin'], function (React, sendOnlyMixin) {
+define(['react', 'coreMixin', 'sendOnlyMixin'], function (React, coreMixin, sendOnlyMixin) {
 
     // use this.sendCommand(subject, data) to talk to server
 
     return React.createClass({
 
-        mixins: [sendOnlyMixin],
+        mixins: [coreMixin, sendOnlyMixin],
 
         getInitialState: function () {
             return {}
