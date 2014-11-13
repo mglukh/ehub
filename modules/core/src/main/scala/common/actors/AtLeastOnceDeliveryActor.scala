@@ -17,6 +17,7 @@
 package common.actors
 
 import agent.shared.{Acknowledge, Acknowledgeable}
+import akka.actor.ActorRef
 import common.NowProvider
 
 import scala.concurrent.duration.DurationInt
@@ -24,32 +25,55 @@ import scala.concurrent.duration.DurationInt
 case class Acknowledged[T](correlationId: Long, msg: T)
 
 
-trait AtLeastOnceDeliveryActor[T] extends ActorWithTicks with WithRemoteActorRef with NowProvider {
+trait AtLeastOnceDeliveryActor[T]
+  extends ActorWithTicks
+  with NowProvider {
 
-  private var list = Vector[InFlight]()
 
+  private var list = Vector[InFlight[T]]()
   private var counter = now
 
-  def inFlightCount = list.size
+  override def commonBehavior: Receive = handleRedeliveryMessages orElse super.commonBehavior
+
+  final def inFlightCount = list.size
 
   def configUnacknowledgedMessagesResendInterval = 5.seconds
 
+  def canDeliverDownstreamRightNow: Boolean
+
+  def getSetOfActiveEndpoints : Set[ActorRef]
+
+  def fullyAcknowledged(correlationId: Long, msg: T)
+
   def deliverMessage(msg: T) = {
-    list = list :+ send(InFlight(0, msg, correlationId(msg)))
+    list = list :+ send(InFlight[T](0, msg, correlationId(msg), getSetOfActiveEndpoints))
   }
 
-  def acknowledgeUpTo(correlationId: Long) = {
-    logger.debug(s"Ack: $correlationId")
-    list.find(_.correlationId == correlationId).foreach(v => self ! Acknowledged[T](correlationId, v.msg))
-    list = list.dropWhile(_.correlationId <= correlationId)
+
+
+  def acknowledgeUpTo(correlationId: Long, ackedByRef: ActorRef) = {
+    logger.debug(s"Ack: $correlationId from $ackedByRef")
+
+    list = list.map {
+      case InFlight(time, msg, cId, endpoints) if cId <= correlationId =>
+        InFlight[T](time, msg, cId, endpoints.filter(_ != ackedByRef))
+      case other => other
+    } filter {
+      case InFlight(_, msg, cId, endpoints) if endpoints.isEmpty =>
+        fullyAcknowledged(cId, msg)
+        false
+      case _ => true
+    }
+
   }
 
-  override def processTick() = {
+  override def internalProcessTick() = {
     resendAllPending()
+    super.internalProcessTick()
   }
 
   def handleRedeliveryMessages: Receive = {
-    case Acknowledge(x) => acknowledgeUpTo(x)
+    case Acknowledge(x) => acknowledgeUpTo(x, sender())
   }
 
   private def correlationId(m: T): Long = {
@@ -58,7 +82,7 @@ trait AtLeastOnceDeliveryActor[T] extends ActorWithTicks with WithRemoteActorRef
   }
 
   private def resendAllPending() = {
-    if (remoteActorRef.isDefined && list.nonEmpty) {
+    if (canDeliverDownstreamRightNow && list.nonEmpty) {
       logger.debug(s"Resending pending messages. Total inflight: $inFlightCount")
       list = for (
         next <- list
@@ -66,24 +90,29 @@ trait AtLeastOnceDeliveryActor[T] extends ActorWithTicks with WithRemoteActorRef
     }
   }
 
-  private def resend(m: InFlight): InFlight = {
-    if (now - m.sentTime > configUnacknowledgedMessagesResendInterval.toMillis) {
+  private def resend(m: InFlight[T]): InFlight[T] = {
+    if (canDeliverDownstreamRightNow && now - m.sentTime > configUnacknowledgedMessagesResendInterval.toMillis) {
       logger.debug(s"Resending ${m.correlationId}")
       send(m)
     } else m
   }
 
-  private def send(m: InFlight): InFlight = {
-    val sentTime = remoteActorRef match {
-      case None => m.sentTime
-      case Some(ref) =>
-        ref ! Acknowledgeable(m.msg, m.correlationId)
-        now
-    }
-    InFlight(sentTime, m.msg, m.correlationId)
-  }
+  private def send(m: InFlight[T]): InFlight[T] = canDeliverDownstreamRightNow match {
+    case true =>
+      val activeEndpoints = getSetOfActiveEndpoints
 
-  private case class InFlight(sentTime: Long, msg: T, correlationId: Long)
+      val remainingEndpoints = m.endpoints.filter(activeEndpoints.contains)
+
+      remainingEndpoints.foreach { actor =>
+        actor ! Acknowledgeable(m.msg, m.correlationId)
+      }
+
+      InFlight[T](now, m.msg, m.correlationId, remainingEndpoints)
+    case false => m
+  }
 
 
 }
+
+private case class InFlight[T](sentTime: Long, msg: T, correlationId: Long, endpoints: Set[ActorRef])
+

@@ -17,13 +17,16 @@
 package hq.gates
 
 import agent.flavors.files.{Cursor, ProducedMessage}
-import agent.shared.{Acknowledge, MessageWithAttachments, Acknowledgeable}
+import agent.shared._
 import akka.actor._
 import akka.util.ByteString
-import common.actors.{PipelineWithStatesActor, SingleComponentActor}
+import common.actors.{ActorWithComposableBehavior, AtLeastOnceDeliveryActor, PipelineWithStatesActor, SingleComponentActor}
 import common.{BecomeActive, BecomePassive}
 import hq._
 import play.api.libs.json.{JsValue, Json}
+
+import scala.collection.mutable
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object GateActor {
   def props(id: String) = Props(new GateActor(id))
@@ -31,15 +34,81 @@ object GateActor {
   def start(id: String)(implicit f: ActorRefFactory) = f.actorOf(props(id), id)
 }
 
+object SuperSlowTempConsumer {
+  def props(ref: ActorRef) = Props(new SuperSlowTempConsumer(ref))
+
+  def start(ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(ref))
+}
+
+class SuperSlowTempConsumer(ref: ActorRef) extends ActorWithComposableBehavior {
+
+  override def commonBehavior: Receive = handler orElse super.commonBehavior
+
+  override def preStart(): Unit = {
+    super.preStart()
+    ref ! RegisterSink(self)
+  }
+
+  def handler: Receive = {
+    case Acknowledgeable(msg, id) =>
+      Thread.sleep(15000)
+      sender ! Acknowledge(id)
+      msg match {
+        case Acknowledgeable(ProducedMessage(MessageWithAttachments(msg: ByteString, attachments), c: Cursor),_) =>
+          logger.info(s"Received (super slow): ${msg.utf8String}, attachments: $attachments, cursor at $c")
+      }
+  }
+}
+
+object MediumSlowTempConsumer {
+  def props(ref: ActorRef) = Props(new MediumSlowTempConsumer(ref))
+
+  def start(ref: ActorRef)(implicit f: ActorRefFactory) = f.actorOf(props(ref))
+}
+
+class MediumSlowTempConsumer(ref: ActorRef) extends ActorWithComposableBehavior {
+
+  override def commonBehavior: Receive = handler orElse super.commonBehavior
+
+  override def preStart(): Unit = {
+    super.preStart()
+    ref ! RegisterSink(self)
+  }
+
+  def handler: Receive = {
+    case Acknowledgeable(msg, id) =>
+      Thread.sleep(1000)
+      sender ! Acknowledge(id)
+      msg match {
+        case Acknowledgeable(ProducedMessage(MessageWithAttachments(msg: ByteString, attachments), c: Cursor),_) =>
+          logger.info(s"Received (avg slow): ${msg.utf8String}, attachments: $attachments, cursor at $c")
+      }
+  }
+}
+
+
+case class RegisterSink(sinkRef: ActorRef)
+
+
 class GateActor(id: String)
   extends PipelineWithStatesActor
+  with AtLeastOnceDeliveryActor[Acknowledgeable[_]]
   with SingleComponentActor {
 
-  var active = false
+
+  override def configUnacknowledgedMessagesResendInterval: FiniteDuration = 10.seconds
+
+  private val correlationToOrigin: mutable.Map[Long, ActorRef] = mutable.Map()
+  private var sinks: Set[ActorRef] = Set()
 
   override def key = ComponentKey("gate/" + id)
 
   override def preStart(): Unit = {
+
+    // TODO remove
+    SuperSlowTempConsumer.start(self)
+    MediumSlowTempConsumer.start(self)
+
     context.parent ! GateAvailable(key)
     super.preStart()
   }
@@ -47,26 +116,22 @@ class GateActor(id: String)
   override def commonBehavior: Actor.Receive = messageHandler orElse super.commonBehavior
 
   override def becomeActive(): Unit = {
-    active = true
     topicUpdate(T_INFO, info)
   }
 
   override def becomePassive(): Unit = {
-    active = false
     topicUpdate(T_INFO, info)
   }
 
   def info = Some(Json.obj(
     "name" -> id,
     "text" -> s"some random text from $id",
-    "state" -> (if (active) "active" else "passive")
+    "state" -> (if (isPipelineActive) "active" else "passive")
   ))
-
 
   override def processTopicSubscribe(ref: ActorRef, topic: TopicKey) = topic match {
     case T_INFO => topicUpdate(T_INFO, info, singleTarget = Some(ref))
   }
-
 
   override def processTopicCommand(ref: ActorRef, topic: TopicKey, maybeData: Option[JsValue]) = topic match {
     case T_STOP =>
@@ -89,15 +154,42 @@ class GateActor(id: String)
       self ! PoisonPill
   }
 
-  private val messageHandler: Receive = {
-    case Acknowledgeable(msg, id) =>
-      sender ! Acknowledge(id)
-      msg match {
-        case ProducedMessage(MessageWithAttachments(msg: ByteString, attachments), c:Cursor) =>
-          logger.info(s"Received: ${msg.utf8String}, attachments: ${attachments}, cursor at $c")
-      }
-      Thread.sleep(3000)
+  override def canDeliverDownstreamRightNow: Boolean = isPipelineActive
 
+  override def fullyAcknowledged(correlationId: Long, msg: Acknowledgeable[_]): Unit = {
+    logger.info(s"Fully acknowledged $correlationId / ${msg.id}")
+    correlationToOrigin.get(msg.id).foreach { origin =>
+      logger.info(s"Ack ${msg.id} with tap")
+      origin ! Acknowledge(msg.id)
+    }
+  }
+
+  override def getSetOfActiveEndpoints: Set[ActorRef] = sinks
+
+  private def messageHandler: Receive = {
+    case GateStateCheck(ref) =>
+      logger.debug(s"Received state check from $ref, our state: $isPipelineActive")
+      if (isPipelineActive) {
+        ref ! GateStateUpdate(GateOpen())
+      } else {
+        ref ! GateStateUpdate(GateClosed())
+      }
+    case RegisterSink(sinkRef) =>
+      sinks += sender()
+      logger.info(s"New sink: ${sender()}")
+    case b: Acknowledgeable[_] =>
+      if (isPipelineActive) {
+        logger.info(s"New message arrived at the gate... ${b.id}")
+        if (!correlationToOrigin.contains(b.id)) {
+          correlationToOrigin += b.id -> sender()
+          deliverMessage(b)
+        } else {
+          logger.info(s"Received duplicate message ${b.id}")
+        }
+      } else {
+        sender ! GateStateUpdate(GateClosed())
+      }
   }
 
 }
+

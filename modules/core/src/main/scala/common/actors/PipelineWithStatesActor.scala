@@ -26,6 +26,12 @@ trait PipelineWithStatesActor extends ActorWithComposableBehavior {
 
   def lastRequestedState = requestedState
 
+  def isPipelineActive = requestedState match {
+    case Some(Active()) => true
+    case _ => false
+  }
+  def isPipelinePassive = !isPipelineActive
+
   def becomeActive(): Unit = {}
 
   def becomePassive(): Unit = {}

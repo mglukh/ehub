@@ -65,9 +65,11 @@ class PullingActorPublisher[T, C <: Cursor](val proxy: ResourcePullingProxy[T, C
   private var currentCursor = initialCursor
 
 
-  override def processTick(): Unit = lastRequestedState match {
-    case Some(Active()) => pullAndReleaseNext()
-    case _ => ()
+  override def processTick(): Unit = {
+    lastRequestedState match {
+      case Some(Active()) => pullAndReleaseNext()
+      case _ => ()
+    }
   }
 
 

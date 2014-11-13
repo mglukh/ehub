@@ -29,6 +29,14 @@ case class Acknowledge(id: Long) extends AgentMessage
 case class MessageWithAttachments[T](msg: T, attachments: JsValue) extends AgentMessage
 
 
+sealed trait GateState
+case class GateClosed() extends GateState
+case class GateOpen() extends GateState
+
+case class GateStateCheck(ref: ActorRef)
+case class GateStateUpdate(state: GateState)
+
+
 case class Handshake(ref: ActorRef, name: String) extends AgentControllerMessage
 case class CommunicationProxyRef(ref: ActorRef) extends AgentControllerMessage
 

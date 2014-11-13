@@ -16,21 +16,22 @@
 
 package common.actors
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.ActorRef
 import akka.remote.DisassociatedEvent
-import com.typesafe.scalalogging.StrictLogging
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.util.{Failure, Success}
 
-trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef {
+trait ReconnectingActor
+  extends ActorWithComposableBehavior
+  with WithRemoteActorRef {
 
   implicit private val ec = context.dispatcher
-
-
   private var peer: Option[ActorRef] = None
 
   override final def remoteActorRef: Option[ActorRef] = peer
+
+  override def commonBehavior: Receive = handleReconnectMessages orElse super.commonBehavior
 
   def connectionEndpoint: String
 
@@ -39,6 +40,10 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
   def reconnectAttemptInterval = 3.seconds
 
   def connected: Boolean = peer.isDefined
+
+  def onConnectedToEndpoint() = {}
+
+  def onDisconnectedFromEndpoint() = {}
 
   override def preStart(): Unit = {
     context.system.eventStream.subscribe(self, classOf[DisassociatedEvent])
@@ -56,8 +61,10 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
   }
 
   def disconnect(): Unit = {
-    if (peer.isDefined) self ! DisconnectedState()
-    peer = None
+    if (peer.isDefined) {
+      peer = None
+      onDisconnectedFromEndpoint()
+    }
   }
 
   def initiateReconnect(): Unit = {
@@ -74,15 +81,13 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
     case Connected(ref) =>
       logger.info(s"Connected to $ref")
       peer = Some(ref)
-      self ! ConnectedState()
+      onConnectedToEndpoint()
     case Associate() =>
       initiateReconnect()
     case DisassociatedEvent(local, remote, inbound) =>
       logger.info("Disconnected... ")
       peer match {
-        case Some(ref) if ref.path.address == remote =>
-          peer = None
-          self ! DisconnectedState()
+        case Some(ref) if ref.path.address == remote => disconnect()
         case _ => ()
       }
     case AssociationFailed(x) =>
@@ -91,15 +96,11 @@ trait ReconnectingActor extends StrictLogging with Actor with WithRemoteActorRef
 
   private def actorSelection = context.actorSelection(connectionEndpoint)
 
-  case class AssociationFailed(cause: Throwable)
-
-  case class ConnectedState()
-
-  case class DisconnectedState()
-
-  private case class Connected(ref: ActorRef)
-
-  private case class Associate()
-
 
 }
+
+private case class AssociationFailed(cause: Throwable)
+
+private case class Connected(ref: ActorRef)
+
+private case class Associate()

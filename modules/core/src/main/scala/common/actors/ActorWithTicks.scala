@@ -31,13 +31,15 @@ trait ActorWithTicks extends ActorWithComposableBehavior {
     super.preStart()
   }
 
-  def processTick(): Unit
+  def internalProcessTick(): Unit = {}
+  def processTick(): Unit = {}
 
 
   private def scheduleTick() = this.context.system.scheduler.scheduleOnce(tickInterval, self, Tick())(context.dispatcher)
 
   private def handleTicks: Receive = {
     case Tick() =>
+      internalProcessTick()
       processTick()
       scheduleTick()
   }
