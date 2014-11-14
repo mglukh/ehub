@@ -45,6 +45,11 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
     var aggregationTimer = false;
     var aggregatedMessage = [];
 
+    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+        return v.toString(16);
+    });
+
     function attemptConnection() {
         attemptsSoFar++;
         currentState = WebSocket.CONNECTING;
@@ -63,6 +68,8 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
             console.debug("Websocket open at " + endpoint + " after " + attemptsSoFar + " attempts");
             attemptsSoFar = 0;
             connection = sock;
+
+            sock.send("fX" + uuid);
 
             listeners.forEach(function (next) {
                 if (next.onOpen) next.onOpen();
@@ -130,6 +137,9 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
         return currentState == WebSocket.OPEN;
     }
 
+    function getUUID() {
+        return uuid;
+    }
 
     function scheduleSend(msg) {
         if ($.inArray(msg, aggregatedMessage) == -1) {
@@ -198,6 +208,7 @@ define(['jquery', 'lz'], function (jquery, xxhash, lz) {
                 onMessage: function (eventId, type, payload) {
                     if (messageHandlers[eventId]) messageHandlers[eventId](type, payload);
                 },
+                uuid: getUUID,
                 stop: stopFunc,
                 subscribe: subscribeFunc,
                 unsubscribe: unsubscribeFunc,

@@ -16,10 +16,15 @@
 
 package hq.gates
 
+import akka.actor.Status.Success
 import akka.actor._
 import common.actors.{ActorObjWithoutConfig, ActorWithComposableBehavior, SingleComponentActor}
 import hq._
 import play.api.libs.json.{JsValue, Json}
+import scalaz._
+import Scalaz._
+
+import scala.util.Try
 
 
 object GateManagerActor extends ActorObjWithoutConfig {
@@ -40,6 +45,7 @@ class GateManagerActor
 
   override def commonBehavior: Actor.Receive = handler orElse super.commonBehavior
 
+
   def list = Some(Json.toJson(gates.keys.map { x => Json.obj("id" -> x.key)}.toArray))
 
 
@@ -48,15 +54,19 @@ class GateManagerActor
   }
 
 
-  override def processTopicCommand(ref: ActorRef, topic: TopicKey, maybeData: Option[JsValue]) = topic match {
-    case T_ADD =>
+  override def processTopicCommand(ref: ActorRef, topic: TopicKey, replyToSubj: Option[Any], maybeData: Option[JsValue]) = topic match {
+    case T_ADD => {
       for (
-        data <- maybeData;
-        name <- (data \ "name").asOpt[String]
-      ) {
-        val actor = GateActor.start(name)
+        data <- maybeData.toRightDisjunction("Invalid payload");
+        name <- (data \ "name").asOpt[String].toRightDisjunction("No name provided");
+        nonEmptyName <- if (name.isEmpty) -\/("Name is blank") else name.right
+      ) yield (GateActor.start(nonEmptyName), nonEmptyName)
+    } match {
+      case \/-((actor,name)) =>
         context.watch(actor)
-      }
+        genericCommandSuccess(T_ADD, replyToSubj, Some(s"Gate $name successfully created"))
+      case -\/(error) => genericCommandError(T_ADD, replyToSubj, s"Unable to create gate: $error")
+    }
   }
 
   def handler: Receive = {

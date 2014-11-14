@@ -23,6 +23,7 @@
             jquery: "../lib/jquery/jquery",
             react: "../lib/react/react-with-addons",
             bootstrap: "../lib/bootstrap/js/bootstrap",
+            toastr: "../lib/toastr/toastr",
 
             lz: "/assets/javascripts/lz-string",
             coreMixin: "tools/CoreMixin",
@@ -32,6 +33,9 @@
         },
         shim: {
             bootstrap: {
+                deps: ["jquery"]
+            },
+            toastr: {
                 deps: ["jquery"]
             },
             jquery: {

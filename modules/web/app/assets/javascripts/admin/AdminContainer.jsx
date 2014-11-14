@@ -13,14 +13,62 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-define(['react', 'coreMixin', 'admin/gate/ListContainer','admin/agent/ListContainer'],
-    function (React, coreMixin, GatesContainer, AgentsContainer) {
+define(['toastr', 'react', 'coreMixin', 'subscriberMixin', 'admin/gate/ListContainer','admin/agent/ListContainer'],
+    function (toastr, React, coreMixin, subscriberMixin, GatesContainer, AgentsContainer) {
 
     return React.createClass({
-        mixins: [coreMixin],
+        mixins: [coreMixin, subscriberMixin],
+
+        subscriptionConfig: function () {
+            return {address:'akka.tcp://application@localhost:2552', route:"_", topic:'cmd', target: 'cmdresult'};
+        },
+
 
         getInitialState: function () {
-            return {}
+            return {result: false}
+        },
+
+        componentWillUpdate: function(nextProps, nextState) {
+
+            if (nextState.cmdresult) {
+                if (nextState.cmdresult.error) {
+                    toastr.options = {
+                        "closeButton": false,
+                        "debug": false,
+                        "progressBar": false,
+                        "positionClass": "toast-top-right",
+                        "onclick": null,
+                        "showDuration": "300",
+                        "hideDuration": "1000",
+                        "timeOut": "3000",
+                        "extendedTimeOut": "1000",
+                        "showEasing": "swing",
+                        "hideEasing": "linear",
+                        "showMethod": "fadeIn",
+                        "hideMethod": "fadeOut"
+                    };
+                    toastr.error("Error", nextState.cmdresult.error.msg);
+                }
+                if (nextState.cmdresult.ok) {
+                    toastr.options = {
+                        "closeButton": false,
+                        "debug": false,
+                        "progressBar": false,
+                        "positionClass": "toast-top-right",
+                        "onclick": null,
+                        "showDuration": "300",
+                        "hideDuration": "1000",
+                        "timeOut": "3000",
+                        "extendedTimeOut": "1000",
+                        "showEasing": "swing",
+                        "hideEasing": "linear",
+                        "showMethod": "fadeIn",
+                        "hideMethod": "fadeOut"
+                    };
+                    toastr.info(nextState.cmdresult.ok.msg);
+                }
+                this.setState({result: false});
+            }
         },
 
         render: function () {

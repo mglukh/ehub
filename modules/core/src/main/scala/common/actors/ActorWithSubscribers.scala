@@ -29,7 +29,7 @@ trait ActorWithSubscribers[T] extends ActorWithComposableBehavior {
 
   override def commonBehavior: Actor.Receive = handleMessages orElse super.commonBehavior
 
-  def processCommand(ref: ActorRef, subject: T, maybeData: Option[JsValue]) = {}
+  def processCommand(ref: ActorRef, subject: T, replyToSubj: Option[Any], maybeData: Option[JsValue]) = {}
 
   def processSubscribeRequest(ref: ActorRef, subject: T) = {}
 
@@ -52,6 +52,15 @@ trait ActorWithSubscribers[T] extends ActorWithComposableBehavior {
     data foreach (ref ! Update(self, subj, _, canBeCached = true))
   }
 
+  def cmdOkTo(subj: Any, ref: ActorRef, data: JsValue) = {
+    logger.debug(s"Cmd OK for $subj -> $ref")
+    ref ! CommandOk(self, subj, data)
+  }
+  def cmdErrTo(subj: Any, ref: ActorRef, data: JsValue) = {
+    logger.debug(s"Cmd ERR for $subj -> $ref")
+    ref ! CommandErr(self, subj, data)
+  }
+
   def convertSubject(subj: Any) : Option[T]
 
   private def isOneOfTheSubscribers(ref: ActorRef) = subscribers.values.exists(_.contains(ref))
@@ -59,7 +68,8 @@ trait ActorWithSubscribers[T] extends ActorWithComposableBehavior {
   private def handleMessages: Receive = {
     case Subscribe(sourceRef, subj) => convertSubject(subj) foreach(addSubscriber(sourceRef, _))
     case Unsubscribe(sourceRef, subj) => convertSubject(subj) foreach(removeSubscriber(sourceRef, _))
-    case Command(sourceRef, subj, data) => convertSubject(subj) foreach(processCommand(sourceRef, _, data))
+    case Command(sourceRef, subj, replyToSubj, data) =>
+      convertSubject(subj) foreach(processCommand(sourceRef, _, replyToSubj, data))
     case Terminated(ref) if isOneOfTheSubscribers(ref) => removeSubscriber(ref)
   }
 
@@ -70,7 +80,7 @@ trait ActorWithSubscribers[T] extends ActorWithComposableBehavior {
       case None =>
         logger.info(s"First subscriber for $subject: $ref")
         firstSubscriber(subject)
-      case _ =>
+      case _ => ()
     }
     subscribers += (subject -> (subscribers.getOrElse(subject, new HashSet[ActorRef]()) + ref))
     processSubscribeRequest(ref, subject)

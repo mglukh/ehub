@@ -17,6 +17,9 @@
 define(['wsclient'], function (client) {
 
     return {
+
+
+
         onDataUpdate: function (key, data) {
             var partialStateUpdate = {};
             partialStateUpdate[key] = data;
@@ -88,6 +91,7 @@ define(['wsclient'], function (client) {
 
             console.debug("Initiated subscription for " + componentId());
         },
+
         stopListener: function () {
             if (this.handle) {
                 var id = this.subscriptionConfig();

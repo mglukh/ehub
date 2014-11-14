@@ -55,7 +55,7 @@ class TapProxyActor(val key: ComponentKey, ref: ActorRef)
     case T_INFO => topicUpdate(T_INFO, info, singleTarget = Some(ref))
   }
 
-  override def processTopicCommand(sourceRef: ActorRef, topic: TopicKey, maybeData: Option[JsValue]) = topic match {
+  override def processTopicCommand(sourceRef: ActorRef, topic: TopicKey, replyToSubj: Option[Any], maybeData: Option[JsValue]) = topic match {
     case T_START => ref ! OpenTap()
     case T_STOP => ref ! CloseTap()
     case T_KILL => ref ! RemoveTap()

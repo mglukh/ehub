@@ -133,7 +133,7 @@ class GateActor(id: String)
     case T_INFO => topicUpdate(T_INFO, info, singleTarget = Some(ref))
   }
 
-  override def processTopicCommand(ref: ActorRef, topic: TopicKey, maybeData: Option[JsValue]) = topic match {
+  override def processTopicCommand(ref: ActorRef, topic: TopicKey, replyToSubj: Option[Any], maybeData: Option[JsValue]) = topic match {
     case T_STOP =>
       lastRequestedState match {
         case Some(Active()) =>

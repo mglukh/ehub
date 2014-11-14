@@ -19,7 +19,7 @@ package common.actors
 import akka.actor.ActorRef
 import hq.routing.MessageRouterActor
 import hq._
-import play.api.libs.json.JsValue
+import play.api.libs.json.{JsString, Json, JsValue}
 
 trait SingleComponentActor
   extends ActorWithLocalSubscribers {
@@ -45,18 +45,38 @@ trait SingleComponentActor
       case None => updateToAll(LocalSubj(key, topic), data)
     }
 
+  def genericCommandError(cmdTopicKey: TopicKey, replyToSubj: Option[Any], errorMessage: String, singleTarget: ActorRef = sender()) = {
+    logger.info(s"Command failed $cmdTopicKey, msg: $errorMessage")
+    replyToSubj.foreach(
+      cmdErrTo(_, singleTarget, Json.obj(
+        "error" -> Json.obj(
+          "key" -> cmdTopicKey.key,
+          "msg" -> errorMessage
+        ))))
+  }
+
+  def genericCommandSuccess(cmdTopicKey: TopicKey, replyToSubj: Option[Any], message: Option[String], singleTarget: ActorRef = sender()) = {
+    logger.info(s"Command executed successfully $cmdTopicKey, msg: $message")
+    replyToSubj.foreach(
+      cmdOkTo(_, singleTarget, Json.obj(
+        "ok" -> Json.obj(
+          "key" -> cmdTopicKey.key,
+          "msg" -> JsString(message.getOrElse(""))
+        ))))
+  }
+
   def processTopicSubscribe(sourceRef: ActorRef, topic: TopicKey): Unit = {}
 
   def processTopicUnsubscribe(sourceRef: ActorRef, topic: TopicKey): Unit = {}
 
-  def processTopicCommand(sourceRef: ActorRef, topic: TopicKey, maybeData: Option[JsValue]): Unit = {}
+  def processTopicCommand(sourceRef: ActorRef, topic: TopicKey, replyToSubj: Option[Any], maybeData: Option[JsValue]): Unit = {}
 
   override def processSubscribeRequest(sourceRef: ActorRef, subject: LocalSubj): Unit = processTopicSubscribe(sourceRef, subject.topic)
 
   override def processUnsubscribeRequest(sourceRef: ActorRef, subject: LocalSubj): Unit = processTopicUnsubscribe(sourceRef, subject.topic)
 
-  override def processCommand(sourceRef: ActorRef, subject: LocalSubj, maybeData: Option[JsValue]): Unit = {
-   logger.info(s"!>>>> received command for ${subject.topic} from $sourceRef")
-    processTopicCommand(sourceRef, subject.topic, maybeData)
+  override def processCommand(sourceRef: ActorRef, subject: LocalSubj, replyToSubj: Option[Any], maybeData: Option[JsValue]): Unit = {
+    logger.info(s"!>>>> received command for ${subject.topic} from $sourceRef reply to $replyToSubj")
+    processTopicCommand(sourceRef, subject.topic, replyToSubj, maybeData)
   }
 }

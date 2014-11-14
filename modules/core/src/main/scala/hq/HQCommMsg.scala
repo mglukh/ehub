@@ -43,9 +43,13 @@ case class Subscribe(sourceRef: ActorRef, subj: Any) extends HQCommMsg[Any]
 
 case class Unsubscribe(sourceRef: ActorRef, subj: Any) extends HQCommMsg[Any]
 
-case class Command(sourceRef: ActorRef, subj: Any, data: Option[JsValue] = None) extends HQCommMsg[Any]
+case class Command(sourceRef: ActorRef, subj: Any, replyToSubj: Option[Any], data: Option[JsValue] = None) extends HQCommMsg[Any]
 
 case class Update(sourceRef: ActorRef, subj: Any, data: JsValue, canBeCached: Boolean = true) extends HQCommMsg[Any]
+
+case class CommandOk(sourceRef: ActorRef, subj: Any, data: JsValue) extends HQCommMsg[Any]
+case class CommandErr(sourceRef: ActorRef, subj: Any, data: JsValue) extends HQCommMsg[Any]
+
 
 case class Stale(sourceRef: ActorRef, subj: Any) extends HQCommMsg[Any]
 

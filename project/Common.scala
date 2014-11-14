@@ -58,6 +58,8 @@ object Common {
     "org.webjars" %% "webjars-play" % "2.3.0-2",
     "org.webjars" % "requirejs" % "2.1.14-3",
     "org.webjars" % "requirejs-text" % "2.0.10-1",
-    "org.webjars" % "react" % "0.12.0"
+    "org.webjars" % "react" % "0.12.0",
+    "org.webjars" % "toastr" % "2.1.0",
+    "org.scalaz" %% "scalaz-core" % "7.1.0"
   )
 }

@@ -16,6 +16,8 @@
 
 package actors
 
+import java.util.UUID
+
 import akka.actor.{Actor, ActorRef, Props}
 import com.diogoduailibe.lzstring4j.LZString
 import common.actors.{ActorWithComposableBehavior, ActorWithTicks}
@@ -46,7 +48,12 @@ class WebsocketActor(out: ActorRef)
 
   var aggregator: mutable.Map[String, String] = new mutable.HashMap[String, String]()
 
+  var clientSeed : Option[String] = None
+  var cmdReplySubj : Option[LocalSubj] = None
+
   override def tickInterval: FiniteDuration = 200.millis
+
+
 
   override def preStart(): Unit = {
     super.preStart()
@@ -57,6 +64,15 @@ class WebsocketActor(out: ActorRef)
 
   private def messageHandler: Actor.Receive = {
     case Update(sourceRef, subj, data, _) =>
+      path2alias get subj2path(subj) foreach { path => scheduleOut(path, buildClientMessage("U", path)(Json.stringify(data)))}
+    case CommandErr(sourceRef, subj, data) =>
+      logger.debug(s"!>>> ${subj2path(subj)}")
+      logger.debug(s"!>>> ${path2alias get subj2path(subj)}")
+      path2alias get subj2path(subj) foreach { path => logger.info("!>>>>> " + buildClientMessage("U", path)(Json.stringify(data))) }
+      logger.debug(s"!>>> ${path2alias get subj2path(subj)}")
+
+      path2alias get subj2path(subj) foreach { path => scheduleOut(path, buildClientMessage("U", path)(Json.stringify(data)))}
+    case CommandOk(sourceRef, subj, data) =>
       path2alias get subj2path(subj) foreach { path => scheduleOut(path, buildClientMessage("U", path)(Json.stringify(data)))}
     case Stale(sourceRef, subj) =>
       path2alias get subj2path(subj) foreach { path => scheduleOut(path, buildClientMessage("D", path)())}
@@ -77,6 +93,7 @@ class WebsocketActor(out: ActorRef)
         val data = msgContents.tail
 
         mtype match {
+          case 'X' => addUUID(data)
           case 'A' => addOrReplaceAlias(data)
           case 'B' => addOrReplaceLocationAlias(data)
           case _ => extractByAlias(data) foreach { str =>
@@ -97,8 +114,10 @@ class WebsocketActor(out: ActorRef)
 
 
   private def subj2path(subj: Any) = subj match {
-    case RemoteSubj(addr, LocalSubj(ComponentKey(compKey), TopicKey(topicKey))) => segments2path(location2alias.getOrElse(addr, addr), compKey, topicKey)
-    case LocalSubj(ComponentKey(compKey), TopicKey(topicKey)) => segments2path("_", compKey, topicKey)
+    case RemoteSubj(addr, LocalSubj(ComponentKey(compKey), TopicKey(topicKey))) =>
+      mapComponents(compKey).map(segments2path(location2alias.getOrElse(addr, addr), _, topicKey)).getOrElse("invalid")
+    case LocalSubj(ComponentKey(compKey), TopicKey(topicKey)) =>
+      mapComponents(compKey).map(segments2path("_", _, topicKey)).getOrElse("invalid")
     case _ => "invalid"
   }
 
@@ -116,6 +135,17 @@ class WebsocketActor(out: ActorRef)
     path2alias += path -> al
   }
 
+  private def addUUID(value: String) = {
+
+    logger.info(s"UUID $value")
+
+    clientSeed = Some(value)
+    cmdReplySubj = Some(LocalSubj(ComponentKey(value), TopicKey("cmd")))
+
+    MessageRouterActor.path ! RegisterComponent(ComponentKey(value), self)
+
+  }
+
   private def addOrReplaceLocationAlias(value: String) = {
 
     val idx: Int = value.indexOf(opSplitChar)
@@ -131,7 +161,7 @@ class WebsocketActor(out: ActorRef)
   private def processRequestByType(msgType: Char, subj: Subj, payload: Option[JsValue]) = msgType match {
     case 'S' => Some(Subscribe(self, subj))
     case 'U' => Some(Unsubscribe(self, subj))
-    case 'C' => Some(Command(self, subj, payload))
+    case 'C' => Some(Command(self, subj, cmdReplySubj, payload))
     case _ =>
       logger.warn(s"Invalid message type: " + msgType)
       None
@@ -145,15 +175,28 @@ class WebsocketActor(out: ActorRef)
     alias2path.get(al).map(_ + path)
   }
 
+  private def mapComponents(comp: String) : Option[String] = {
+    comp match {
+      case "_" => None
+      case x if clientSeed.isDefined && clientSeed.get == x => Some("_")
+      case other => Some(other)
+    }
+  }
+
   private def extractSubjectAndPayload(str: String, f: (Subj, Option[JsValue]) => Unit) = {
     def extractPayload(list: List[String]) = list match {
       case Nil => None
       case x :: xs => Json.parse(x).asOpt[JsValue]
     }
     def extract(list: List[String]) = list match {
-      case "_" :: comp :: topic :: tail => f(LocalSubj(ComponentKey(comp), TopicKey(topic)), extractPayload(tail))
-      case addr :: comp :: topic :: tail => alias2location.get(addr).foreach { loc =>
-        f(RemoteSubj(loc, LocalSubj(ComponentKey(comp), TopicKey(topic))), extractPayload(tail))
+      case "_" :: comp :: topic :: tail =>
+        mapComponents(comp) foreach { mappedComp =>
+          f(LocalSubj(ComponentKey(mappedComp), TopicKey(topic)), extractPayload(tail))
+        }
+      case addr :: comp :: topic :: tail => mapComponents(comp) foreach { mappedComp =>
+        alias2location.get(addr).foreach { loc =>
+          f(RemoteSubj(loc, LocalSubj(ComponentKey(mappedComp), TopicKey(topic))), extractPayload(tail))
+        }
       }
       case _ => logger.warn(s"Invalid payload $str")
     }
