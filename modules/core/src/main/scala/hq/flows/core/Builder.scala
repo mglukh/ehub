@@ -17,35 +17,34 @@
 package hq.flows.core
 
 import akka.actor.{ActorRefFactory, Props}
-import akka.stream.actor.{ActorSubscriber, ActorPublisher}
 import akka.stream.scaladsl._
 import com.typesafe.scalalogging.StrictLogging
-import common.{JsonFrame, Fail}
 import common.ToolExt._
+import common.{Fail, JsonFrame}
 import play.api.libs.json.JsValue
 
 import scalaz.Scalaz._
 import scalaz.{-\/, \/, \/-}
 
+case class FlowComponents(tap: Props, pipeline: Flow[JsonFrame, JsonFrame], sink: Props)
+
 object Builder extends StrictLogging {
 
-  type SourceActorPropsType = Props
-  type SourceType = Source[JsonFrame]
+  type TapActorPropsType = Props
   type SinkActorPropsType = Props
-  type SinkType = Sink[JsonFrame]
   type InstructionType = (JsonFrame) => scala.collection.immutable.Seq[JsonFrame]
   type ProcessorFlowType = Flow[JsonFrame, JsonFrame]
-  type FlowType = RunnableFlow
 
-  def apply()(implicit config: JsValue, f: ActorRefFactory): \/[Fail, FlowType] =
+
+  def apply()(implicit config: JsValue, f: ActorRefFactory): \/[Fail, FlowComponents] =
     for (
       tap <- buildTap;
       pipeline <- buildProcessingPipeline;
       sink <- buildSink
-    ) yield tap.via(pipeline).to(sink)
+    ) yield FlowComponents(tap, pipeline, sink)
 
 
-  def buildTap(implicit config: JsValue, f: ActorRefFactory): \/[Fail, SourceType] = {
+  def buildTap(implicit config: JsValue, f: ActorRefFactory): \/[Fail, TapActorPropsType] = {
     val allBuilders = Seq(GateInputBuilder)
     for (
       input <- config #> 'tap \/> Fail("Invalid config: missing 'tap' branch");
@@ -54,11 +53,11 @@ object Builder extends StrictLogging {
       builder <- allBuilders.find(_.configId == inputClass)
         \/> Fail(s"Unsupported or invalid input class $inputClass. Supported classes: ${allBuilders.map(_.configId)}");
       tap <- builder.build(inputProps)
-    ) yield PublisherSource(ActorPublisher[JsonFrame](f.actorOf(tap)))
-    
+    ) yield tap
+
   }
 
-  def buildSink(implicit config: JsValue, f: ActorRefFactory): \/[Fail, SinkType] = {
+  def buildSink(implicit config: JsValue, f: ActorRefFactory): \/[Fail, SinkActorPropsType] = {
     val allBuilders = Seq(BlackHoleSinkBuilder, GateSinkBuilder)
     for (
       sink <- config #> 'sink \/> Fail("Invalid config: missing 'sink' branch");
@@ -67,7 +66,7 @@ object Builder extends StrictLogging {
       builder <- allBuilders.find(_.configId == sinkClass)
         \/> Fail(s"Unsupported or invalid sink class $sinkClass. Supported classes: ${allBuilders.map(_.configId)}");
       sink <- builder.build(sinkProps)
-    ) yield SubscriberSink(ActorSubscriber(f.actorOf(sink)))
+    ) yield sink
   }
 
   def buildInstruction(implicit config: JsValue): \/[Fail, InstructionType] = {

@@ -53,7 +53,7 @@ class ConfigStorageActor(implicit config: Config) extends ActorWithComposableBeh
     logger.info(s"Creating DB in ${config.getString("agent.storage.directory")}, provider $storage")
   }
 
-  override def commonBehavior(): Actor.Receive = super.commonBehavior orElse {
+  override def commonBehavior: Actor.Receive = super.commonBehavior orElse {
     case StoreConfig(TapConfig(tapId, c, s)) =>
       logger.debug(s"Persisted config and state for flow $tapId")
       storage.store(tapId, c, s)

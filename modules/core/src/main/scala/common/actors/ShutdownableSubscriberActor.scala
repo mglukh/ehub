@@ -29,6 +29,13 @@ trait ShutdownableSubscriberActor extends ActorSubscriber with ActorWithComposab
     context.stop(self)
   }
 
+
+  @throws[Exception](classOf[Exception])
+  override def postStop(): Unit = {
+    super.postStop()
+    logger.debug("!>>>> post stop!")
+  }
+
   private def handleSubscriberShutdown : Receive = {
     case OnComplete => stop(Some("OnComplete"))
     case OnError(cause) => stop(Some("Error: " + cause.getMessage))

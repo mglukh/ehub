@@ -21,6 +21,7 @@ import akka.actor.ActorSystem
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
 import hq.agents.AgentsManagerActor
+import hq.flows.FlowManagerActor
 import hq.gates.GateManagerActor
 import hq.routing.MessageRouterActor
 
@@ -39,4 +40,5 @@ object HQLauncher extends App {
   MessageRouterActor.start
   GateManagerActor.start
   AgentsManagerActor.start
+  FlowManagerActor.start
 }

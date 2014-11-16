@@ -16,7 +16,7 @@
 
 package common.actors
 
-import akka.actor.ActorRef
+import akka.actor.{Terminated, ActorRef}
 import akka.remote.DisassociatedEvent
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
@@ -34,6 +34,8 @@ trait ReconnectingActor
   override def commonBehavior: Receive = handleReconnectMessages orElse super.commonBehavior
 
   def connectionEndpoint: String
+
+  def monitorConnectionWithDeathWatch = false
 
   def remoteAssociationTimeout = 5.seconds
 
@@ -81,9 +83,13 @@ trait ReconnectingActor
     case Connected(ref) =>
       logger.info(s"Connected to $ref")
       peer = Some(ref)
+      if (monitorConnectionWithDeathWatch) context.watch(ref)
       onConnectedToEndpoint()
     case Associate() =>
       initiateReconnect()
+    case Terminated(ref) if peer.contains(ref) =>
+      logger.info("Disconnected... ")
+      disconnect()
     case DisassociatedEvent(local, remote, inbound) =>
       logger.info("Disconnected... ")
       peer match {

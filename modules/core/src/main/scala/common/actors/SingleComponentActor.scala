@@ -25,6 +25,7 @@ trait SingleComponentActor
   extends ActorWithLocalSubscribers {
 
   val T_ADD = TopicKey("add")
+  val T_EDIT = TopicKey("edit")
   val T_LIST = TopicKey("list")
   val T_INFO = TopicKey("info")
   val T_START = TopicKey("start")

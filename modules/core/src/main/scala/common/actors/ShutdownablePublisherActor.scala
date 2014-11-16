@@ -26,7 +26,14 @@ trait ShutdownablePublisherActor[T] extends ActorPublisher[T] with ActorWithComp
 
   private def stop(reason: Option[String]) = {
     logger.info(s"Shutting down publisher, reason given: $reason")
+    onComplete()
     context.stop(self)
+  }
+
+  @throws[Exception](classOf[Exception])
+  override def postStop(): Unit = {
+    super.postStop()
+    logger.debug("!>>>> post stop!")
   }
 
   private def handlePublisherShutdown : Receive = {

@@ -19,12 +19,10 @@ package hq.gates
 import agent.flavors.files.{Cursor, ProducedMessage}
 import agent.shared._
 import akka.actor._
-import akka.remote.transport.ThrottlerTransportAdapter.Direction.Receive
 import akka.util.ByteString
 import common.actors.{AtLeastOnceDeliveryActor, PipelineWithStatesActor, SingleComponentActor}
-import common.{JsonFrame, BecomeActive, BecomePassive}
+import common.{BecomeActive, BecomePassive, JsonFrame}
 import hq._
-import hq.flows.SamplePipeActor
 import play.api.libs.json.{JsNumber, JsValue, Json}
 
 import scala.collection.mutable
@@ -55,8 +53,6 @@ class GateActor(id: String)
   override def key = ComponentKey("gate/" + id)
 
   override def preStart(): Unit = {
-
-    if (id == "aaa") SamplePipeActor.start
 
     if (isPipelineActive)
       switchToCustomBehavior(flowMessagesHandlerForOpenGate)
@@ -176,8 +172,12 @@ class GateActor(id: String)
       } else {
         ref ! GateStateUpdate(GateClosed())
       }
+    case Terminated(ref) if sinks.contains(ref) =>
+      logger.info(s"Sink is gone: $ref")
+      sinks -= ref
     case RegisterSink(sinkRef) =>
       sinks += sender()
+      context.watch(sinkRef)
       logger.info(s"New sink: ${sender()}")
   }
 

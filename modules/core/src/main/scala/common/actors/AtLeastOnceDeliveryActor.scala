@@ -47,26 +47,30 @@ trait AtLeastOnceDeliveryActor[T]
 
   def deliverMessage(msg: T) = {
     val nextCorrelationId = correlationId(msg)
-    list = list :+ send(InFlight[T](0, msg, nextCorrelationId, getSetOfActiveEndpoints))
+    list = list :+ send(InFlight[T](0, msg, nextCorrelationId, getSetOfActiveEndpoints, Set()))
     nextCorrelationId
   }
 
 
+  private def filter() = {
+    list = list.filter {
+      case InFlight(_, msg, cId, endpoints, sentTo) if endpoints.isEmpty && sentTo.nonEmpty =>
+        fullyAcknowledged(cId, msg)
+        false
+      case _ => true
+    }
+  }
 
   def acknowledgeUpTo(correlationId: Long, ackedByRef: ActorRef) = {
     logger.debug(s"Ack: $correlationId from $ackedByRef")
 
     list = list.map {
-      case InFlight(time, msg, cId, endpoints) if cId <= correlationId =>
-        InFlight[T](time, msg, cId, endpoints.filter(_ != ackedByRef))
+      case InFlight(time, msg, cId, endpoints, sentTo) if cId <= correlationId && endpoints.contains(ackedByRef) =>
+        InFlight[T](time, msg, cId, endpoints.filter(_ != ackedByRef), sentTo + ackedByRef)
       case other => other
-    } filter {
-      case InFlight(_, msg, cId, endpoints) if endpoints.isEmpty =>
-        fullyAcknowledged(cId, msg)
-        false
-      case _ => true
     }
 
+    filter()
   }
 
   override def internalProcessTick() = {
@@ -90,12 +94,14 @@ trait AtLeastOnceDeliveryActor[T]
         next <- list
       ) yield resend(next)
     }
+    filter()
   }
 
   private def resend(m: InFlight[T]): InFlight[T] = {
     if (canDeliverDownstreamRightNow && now - m.sentTime > configUnacknowledgedMessagesResendInterval.toMillis) {
-      logger.debug(s"Resending ${m.correlationId}")
-      send(m)
+      val inflight = send(m)
+      logger.debug(s"Resending $inflight")
+      inflight
     } else m
   }
 
@@ -103,18 +109,20 @@ trait AtLeastOnceDeliveryActor[T]
     case true =>
       val activeEndpoints = getSetOfActiveEndpoints
 
-      val remainingEndpoints = m.endpoints.filter(activeEndpoints.contains)
+      var remainingEndpoints = m.endpoints.filter(activeEndpoints.contains)
+
+      if (remainingEndpoints.isEmpty && m.sentTo.isEmpty) remainingEndpoints = activeEndpoints
 
       remainingEndpoints.foreach { actor =>
         actor ! Acknowledgeable(m.msg, m.correlationId)
       }
 
-      InFlight[T](now, m.msg, m.correlationId, remainingEndpoints)
+      InFlight[T](now, m.msg, m.correlationId, remainingEndpoints, m.sentTo)
     case false => m
   }
 
 
 }
 
-private case class InFlight[T](sentTime: Long, msg: T, correlationId: Long, endpoints: Set[ActorRef])
+private case class InFlight[T](sentTime: Long, msg: T, correlationId: Long, endpoints: Set[ActorRef], sentTo: Set[ActorRef])
 
