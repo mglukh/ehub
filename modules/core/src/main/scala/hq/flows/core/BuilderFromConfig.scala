@@ -14,19 +14,14 @@
  * limitations under the License.
  */
 
-package agent.controller
+package hq.flows.core
 
-import agent.controller.storage.ConfigStorageActor
-import akka.actor.{ActorRef, ActorSystem}
-import com.typesafe.config.ConfigFactory
+import common.Fail
+import play.api.libs.json.JsValue
 
-object AgentLauncher extends App {
+import scalaz.\/
 
-  implicit val system =  ActorSystem("Agent",ConfigFactory.load("akka.conf"))
-
-  implicit val config = ConfigFactory.load("agent.conf")
-
-  ConfigStorageActor.start
-  AgentControllerActor.start
-
-}
+trait BuilderFromConfig[T] {
+   def configId: String
+   def build(props: JsValue): \/[Fail,T]
+ }

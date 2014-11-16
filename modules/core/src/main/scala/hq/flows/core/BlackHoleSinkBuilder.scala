@@ -14,18 +14,31 @@
  * limitations under the License.
  */
 
-package agent.controller.flow
+package hq.flows.core
 
 import akka.actor.{Actor, Props}
 import akka.stream.actor.ActorSubscriberMessage.OnNext
 import akka.stream.actor.{RequestStrategy, WatermarkRequestStrategy, ZeroRequestStrategy}
+import common.{BecomeActive, Fail}
 import common.actors.{Acknowledged, ActorWithComposableBehavior, PipelineWithStatesActor, ShutdownableSubscriberActor}
+import hq.flows.core.Builder.SinkActorPropsType
+import play.api.libs.json.JsValue
 
-object BlackholeAutoAckSinkActor {
+import scalaz.{\/, \/-}
+
+private[core] object BlackHoleSinkBuilder extends BuilderFromConfig[SinkActorPropsType] {
+  val configId = "blackhole"
+
+  override def build(props: JsValue): \/[Fail, SinkActorPropsType] =
+    \/-(BlackholeAutoAckSinkActor.props)
+
+}
+
+private object BlackholeAutoAckSinkActor {
   def props = Props(new BlackholeAutoAckSinkActor())
 }
 
-class BlackholeAutoAckSinkActor
+private class BlackholeAutoAckSinkActor
   extends ActorWithComposableBehavior
   with ShutdownableSubscriberActor with PipelineWithStatesActor {
 
@@ -33,8 +46,18 @@ class BlackholeAutoAckSinkActor
   var disableFlow = ZeroRequestStrategy
   var enableFlow = WatermarkRequestStrategy(1024, 96)
 
+
+  @throws[Exception](classOf[Exception])
+  override def preStart(): Unit = {
+    logger.info(s"!>>> Starting black hole")
+    super.preStart()
+    self ! BecomeActive()
+  }
+
   override def commonBehavior: Actor.Receive = super.commonBehavior orElse {
-    case OnNext(msg) => context.parent ! Acknowledged[Any](-1, msg)
+    case OnNext(msg) =>
+      logger.debug(s"Sent into the black hole: $msg")
+      context.parent ! Acknowledged[Any](-1, msg)
   }
 
   override protected def requestStrategy: RequestStrategy = lastRequestedState match {

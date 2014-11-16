@@ -21,11 +21,12 @@ import java.nio.charset.Charset
 import agent.flavors.files._
 import agent.shared._
 import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.stream.FlowMaterializer
 import akka.stream.actor.{ActorPublisher, ActorSubscriber}
-import akka.stream.scaladsl2._
+import akka.stream.scaladsl._
 import akka.util.ByteString
-import common.{BecomeActive, BecomePassive}
 import common.actors.{Acknowledged, ActorWithComposableBehavior}
+import common.{BecomeActive, BecomePassive}
 import play.api.libs.json._
 import play.api.libs.json.extensions._
 
@@ -34,9 +35,6 @@ object TapActor {
   def props(flowId: Long, config: JsValue, state: Option[JsValue])(implicit mat: FlowMaterializer, system: ActorSystem) = Props(new TapActor(flowId, config, state))
 }
 
-//case class StartFlowInstance()
-//
-//case class SuspendFlowInstance()
 
 case class TapConfigUpdate(flowId: Long, config: JsValue)
 
@@ -44,15 +42,29 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
 
   type In = ProducedMessage[ByteString, Cursor]
   type Out = ProducedMessage[MessageWithAttachments[ByteString], Cursor]
-
-  private var flow: Option[FlowInstance] = None
   var commProxy: Option[ActorRef] = None
-
-  case class FlowInstance(flow: MaterializedFlow, source: ActorRef, sink: ActorRef)
-
+  var active = false
+  private var flow: Option[FlowInstance] = None
   private var cursor2config: Option[Cursor => Option[JsValue]] = None
 
-  var active = false
+  override def preStart(): Unit = {
+    super.preStart()
+    createFlowFromConfig()
+    switchToCustomBehavior(suspended)
+  }
+
+  override def commonBehavior: Receive = super.commonBehavior orElse {
+    case Acknowledged(id, msg) => msg match {
+      case ProducedMessage(_, c: Cursor) =>
+        for (
+          func <- cursor2config;
+          config <- func(c)
+        ) context.parent ! TapConfigUpdate(flowId, config)
+    }
+    case CommunicationProxyRef(ref) =>
+      commProxy = Some(ref)
+      sendToHQAll()
+  }
 
   private def createFlowFromConfig(): Unit = {
 
@@ -65,25 +77,25 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
     implicit val mat = FlowMaterializer()
 
 
-    def buildProcessorFlow(props: JsValue): ProcessorFlow[In, Out] = {
-      val convert = FlowFrom[In].map {
+    def buildProcessorFlow(props: JsValue): Flow[In, Out] = {
+      val convert = Flow[In].map {
         case ProducedMessage(msg, c) =>
           ProducedMessage(MessageWithAttachments(msg, Json.obj()), c)
       }
 
-      val setSource = FlowFrom[Out].map {
+      val setSource = Flow[Out].map {
         case ProducedMessage(MessageWithAttachments(msg, json), c) =>
           val modifiedJson = json set __ \ "sourceId" -> JsString((props \ "sourceId").asOpt[String].getOrElse("undefined"))
           ProducedMessage(MessageWithAttachments(msg, modifiedJson), c)
       }
 
-      val setTags = FlowFrom[Out].map {
+      val setTags = Flow[Out].map {
         case ProducedMessage(MessageWithAttachments(msg, json), c) =>
           val modifiedJson = json set __ \ "tags" -> (props \ "tags").asOpt[JsArray].getOrElse(Json.arr())
           ProducedMessage(MessageWithAttachments(msg, modifiedJson), c)
       }
 
-      convert.append(setSource).append(setTags)
+      convert.via(setSource).via(setTags)
     }
 
 
@@ -98,13 +110,13 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
         f => f.lastModified())
     }
 
-    def buildState() : Option[Cursor] = {
+    def buildState(): Option[Cursor] = {
       for (
         stateCfg <- state;
         fileCursorCfg <- (stateCfg \ "fileCursor").asOpt[JsValue];
         seed <- (fileCursorCfg \ "idx" \ "seed").asOpt[Long];
         resourceId <- (fileCursorCfg \ "idx" \ "rId").asOpt[Long];
-        positionWithinItem <- (fileCursorCfg \ "pos" ).asOpt[Long]
+        positionWithinItem <- (fileCursorCfg \ "pos").asOpt[Long]
       ) yield {
         val state = FileCursor(ResourceIndex(seed, resourceId), positionWithinItem)
         logger.info(s"Initial state: $state")
@@ -166,18 +178,12 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
     val sinkActor = context.actorOf(sinkProps)
     val sink = SubscriberSink(ActorSubscriber[Out](sinkActor))
 
-    val runnableFlow: RunnableFlow[In, Out] = processingSteps.withSource(publisher).withSink(sink)
+    val runnableFlow: RunnableFlow = publisher.via(processingSteps).to(sink)
 
-    val materializedFlow: MaterializedFlow = runnableFlow.run()
+    val materializedFlow: MaterializedMap = runnableFlow.run()
 
     flow = Some(FlowInstance(materializedFlow, publisherActor, sinkActor))
 
-  }
-
-  override def preStart(): Unit = {
-    super.preStart()
-    createFlowFromConfig()
-    switchToCustomBehavior(suspended)
   }
 
   private def startFlow(): Unit = {
@@ -198,25 +204,11 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
     sendToHQAll()
   }
 
-  private def info: JsValue = Json.obj("info" -> Json.obj("id"->"Test","name"->"temp name", "state"->(if (active) "active" else "passive"))) // TODO
-
-
-  override def commonBehavior: Receive = super.commonBehavior orElse {
-    case Acknowledged(id, msg) => msg match {
-      case ProducedMessage(_, c: Cursor) =>
-        for (
-          func <- cursor2config;
-          config <- func(c)
-        ) context.parent ! TapConfigUpdate(flowId, config)
-    }
-    case CommunicationProxyRef(ref) =>
-      commProxy = Some(ref)
-      sendToHQAll()
-  }
+  private def info: JsValue = Json.obj("info" -> Json.obj("id" -> "Test", "name" -> "temp name", "state" -> (if (active) "active" else "passive"))) // TODO
 
   private def sendToHQAll() = {
     sendToHQ(info)
-//    sendToHQ(snapshot)
+    //    sendToHQ(snapshot)
   }
 
   private def sendToHQ(json: JsValue) = {
@@ -237,5 +229,7 @@ class TapActor(flowId: Long, config: JsValue, state: Option[JsValue])(implicit m
       stopFlow()
       switchToCustomBehavior(suspended)
   }
+
+  case class FlowInstance(flow: MaterializedMap, source: ActorRef, sink: ActorRef)
 
 }

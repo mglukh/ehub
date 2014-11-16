@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package agent.controller
+package hq.flows.core
 
-import agent.controller.storage.ConfigStorageActor
-import akka.actor.{ActorRef, ActorSystem}
-import com.typesafe.config.ConfigFactory
+import com.typesafe.scalalogging.StrictLogging
+import common.{JsonFrame, Fail}
+import hq.flows.core.Builder.InstructionType
+import play.api.libs.json.JsValue
 
-object AgentLauncher extends App {
+import scalaz._
 
-  implicit val system =  ActorSystem("Agent",ConfigFactory.load("akka.conf"))
+private[core] object DropProcessorBuilder extends BuilderFromConfig[InstructionType] with StrictLogging {
+  val configId = "drop"
 
-  implicit val config = ConfigFactory.load("agent.conf")
+  override def build(props: JsValue): \/[Fail, InstructionType] = \/- { frame: JsonFrame => List() }
 
-  ConfigStorageActor.start
-  AgentControllerActor.start
 
 }

@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package agent.controller
+package temp
 
-import agent.controller.storage.ConfigStorageActor
-import akka.actor.{ActorRef, ActorSystem}
-import com.typesafe.config.ConfigFactory
+import org.slf4j.LoggerFactory
 
-object AgentLauncher extends App {
+object Generator extends App {
 
-  implicit val system =  ActorSystem("Agent",ConfigFactory.load("akka.conf"))
+  var log = LoggerFactory.getLogger("generator")
 
-  implicit val config = ConfigFactory.load("agent.conf")
-
-  ConfigStorageActor.start
-  AgentControllerActor.start
+  for (
+    i <- 1 to 1000000
+  ) {
+    log.info("New output : " + i)
+    Thread.sleep(100)
+  }
 
 }

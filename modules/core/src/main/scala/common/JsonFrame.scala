@@ -14,19 +14,8 @@
  * limitations under the License.
  */
 
-package agent.controller
+package common
 
-import agent.controller.storage.ConfigStorageActor
-import akka.actor.{ActorRef, ActorSystem}
-import com.typesafe.config.ConfigFactory
+import play.api.libs.json.JsValue
 
-object AgentLauncher extends App {
-
-  implicit val system =  ActorSystem("Agent",ConfigFactory.load("akka.conf"))
-
-  implicit val config = ConfigFactory.load("agent.conf")
-
-  ConfigStorageActor.start
-  AgentControllerActor.start
-
-}
+case class JsonFrame(event: JsValue, ctx: Map[String, JsValue])

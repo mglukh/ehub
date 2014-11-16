@@ -42,7 +42,7 @@ object Common {
     "com.typesafe.akka" %% "akka-remote" % "2.3.6",
     "com.typesafe.akka" %% "akka-cluster" % "2.3.6",
     "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.6",
-    "com.typesafe.akka" %% "akka-stream-experimental" % "0.7",
+    "com.typesafe.akka" %% "akka-stream-experimental" % "0.11",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
     "ch.qos.logback" % "logback-classic" % "1.1.2",
     "org.scalatest" %% "scalatest" % "2.1.3" % "test",

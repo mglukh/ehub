@@ -46,7 +46,9 @@ trait AtLeastOnceDeliveryActor[T]
   def fullyAcknowledged(correlationId: Long, msg: T)
 
   def deliverMessage(msg: T) = {
-    list = list :+ send(InFlight[T](0, msg, correlationId(msg), getSetOfActiveEndpoints))
+    val nextCorrelationId = correlationId(msg)
+    list = list :+ send(InFlight[T](0, msg, nextCorrelationId, getSetOfActiveEndpoints))
+    nextCorrelationId
   }
 
 

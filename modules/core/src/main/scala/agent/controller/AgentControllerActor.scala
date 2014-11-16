@@ -20,7 +20,7 @@ import agent.controller.flow.{TapActor, TapConfigUpdate}
 import agent.controller.storage._
 import agent.shared._
 import akka.actor.{ActorRef, Props}
-import akka.stream.scaladsl2.FlowMaterializer
+import akka.stream.FlowMaterializer
 import com.typesafe.config.Config
 import common.actors._
 import net.ceedubs.ficus.Ficus._
@@ -28,9 +28,6 @@ import play.api.libs.json.{JsValue, Json}
 
 import scala.collection.mutable
 
-/**
- * Created by maks on 18/09/14.
- */
 object AgentControllerActor extends ActorObjWithConfig {
   override def id: String = "controller"
 
@@ -41,8 +38,8 @@ class AgentControllerActor(implicit config: Config)
   extends ActorWithComposableBehavior
   with ReconnectingActor {
 
-  implicit val mat = FlowMaterializer()
   implicit val system = context.system
+  implicit val mat = FlowMaterializer()
 
   val tapActors: mutable.Map[Long, ActorRef] = mutable.HashMap()
   var storage = ConfigStorageActor.path
@@ -69,7 +66,6 @@ class AgentControllerActor(implicit config: Config)
     tapActors += (tapId -> context.actorOf(TapActor.props(tapId, Json.parse(config), maybeState.map(Json.parse)), actorId))
     sendToHQ(snapshot)
   }
-
 
 
   override def onConnectedToEndpoint(): Unit = {
